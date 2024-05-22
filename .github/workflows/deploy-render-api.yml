@@ -1,0 +1,35 @@
+name: Deploy to Render
+
+on:
+  repository_dispatch:
+    types: [deploy-trigger]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+
+      - name: Deploy to Render
+        env:
+          RENDER_DEPLOY_HOOK_KEY: ${{ secrets.RENDER_DEPLOY_HOOK_KEY }}
+          RENDER_DEPLOY_SERVICE_KEY: ${{ secrets.RENDER_DEPLOY_SERVICE_KEY }}
+        run: |
+          response=$(curl -s -o response.txt -w "%{http_code}" -X POST \
+          -H "Content-Type: application/json" \
+          https://api.render.com/deploy/$RENDER_DEPLOY_SERVICE_KEY?key=$RENDER_DEPLOY_HOOK_KEY)
+          
+          echo "Request status code $response"
+          if [ "$response" -ge 400 ] && [ "$response" -lt 600 ]; then
+            echo "Request failed with status code $response"
+            cat response.txt
+            exit 1
+          fi
+
