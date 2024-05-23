@@ -2,6 +2,11 @@ name: Deploy Local RFJS API
 
 on:
   workflow_call:
+    inputs:
+      config-path:
+        description: 'Path to the configuration file'
+        required: true
+        type: string
     secrets:
       HARBOR_HOST:
         required: true
@@ -9,12 +14,26 @@ on:
         required: true
       HARBOR_TOKEN:
         required: true
+      envPAT:
+        required: true
 
 jobs:
+  triage:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/labeler@v4
+      with:
+        repo-token: ${{ secrets.token }}
+        configuration-path: ${{ inputs.config-path }}
+        
   release-helm:
     runs-on: ubuntu-latest
-
     steps:
+      - uses: actions/labeler@v4
+        with:
+          repo-token: ${{ secrets.envPAT }}
+          configuration-path: ${{ inputs.config-path }}
+
       - name: Helm Setup
         uses: azure/setup-helm@v3
         with:
