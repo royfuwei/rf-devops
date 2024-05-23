@@ -5,13 +5,10 @@ on:
     secrets:
       HARBOR_HOST:
         required: true
-        default: ${{ secrets.HARBOR_HOST }}
       HARBOR_USERNAME:
         required: true
-        default: ${{ secrets.HARBOR_USERNAME }}
       HARBOR_TOKEN:
         required: true
-        default: ${{ secrets.HARBOR_TOKEN }}
 
 jobs:
   release-helm:
