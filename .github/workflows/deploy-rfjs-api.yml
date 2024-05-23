@@ -1,0 +1,38 @@
+name: Deploy Local RFJS API
+
+on:
+  workflow_call:
+    secrets:
+      HARBOR_HOST:
+        required: true
+        default: ${{ secrets.HARBOR_HOST }}
+      HARBOR_USERNAME:
+        required: true
+        default: ${{ secrets.HARBOR_USERNAME }}
+      HARBOR_TOKEN:
+        required: true
+        default: ${{ secrets.HARBOR_TOKEN }}
+
+jobs:
+  release-helm:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Helm Setup
+        uses: azure/setup-helm@v3
+        with:
+          version: 3.14.0
+
+      - name: Login to Harbor Registry
+        uses: central-x/helm-login-action@v1
+        with:
+          registry: ${{ secrets.HARBOR_HOST }}
+          username: ${{ secrets.HARBOR_USERNAME }}
+          password: ${{ secrets.HARBOR_TOKEN }}
+
+      - name: Push Helm Chart
+        uses: central-x/helm-push-action@v1
+        with:
+          repository: oci:// ${{ secrets.HARBOR_HOST }}/${{ secrets.HARBOR_USERNAME }}
+          chart: ./rfjs-api
+      
