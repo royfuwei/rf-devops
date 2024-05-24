@@ -56,23 +56,24 @@ jobs:
       #   with:
       #     args: get pods
 
-      - name: Install Helm
-        uses: azure/setup-helm@v1
-        with:
-          version: 'latest'
+      # - name: Install Helm
+      #   uses: azure/setup-helm@v1
+      #   with:
+      #     version: 'latest'
 
-      - uses: pyTooling/Actions/with-post-step@v0.4.5
-        with:
-          main: |
-            echo "Logging in to ${{ secrets.HARBOR_HOST }} ..."
-            helm registry login \
-              --username ${{ secrets.HARBOR_USERNAME }} \
-              --password ${{ secrets.HARBOR_TOKEN }} \
-              ${{ secrets.HARBOR_HOST }}
+      # - name: Helm Registry Login
+      #   uses: pyTooling/Actions/with-post-step@v0.4.5
+      #   with:
+      #     main: |
+      #       echo "Logging in to ${{ secrets.HARBOR_HOST }} ..."
+      #       helm registry login \
+      #         --username ${{ secrets.HARBOR_USERNAME }} \
+      #         --password ${{ secrets.HARBOR_TOKEN }} \
+      #         ${{ secrets.HARBOR_HOST }}
 
-          post: |
-            echo "Logging out of ${{ secrets.HARBOR_HOST }} ..."
-            helm registry logout ${{ secrets.HARBOR_HOST }}
+      #     post: |
+      #       echo "Logging out of ${{ secrets.HARBOR_HOST }} ..."
+      #       helm registry logout ${{ secrets.HARBOR_HOST }}
             
       - name: Checkout Repository
         uses: actions/checkout@v3
@@ -81,22 +82,78 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.envPAT }}
 
-      - name: apply with envsubst 
-        uses: neosec-com/kubectl-aws-eks@1.1.2
+      - name: Deploy
+        uses: WyriHaximus/github-action-helm3@v3
         env:
           KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG }}
-        with:
-          args: |
-            ls -la
-            kubectl get pods
-
-      - name: Deploy local k8s
-        env:
           HARBOR_HOST: ${{ secrets.HARBOR_HOST }}
           HARBOR_USERNAME: ${{ secrets.HARBOR_USERNAME }}
-          KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG }}
-        run: |
-          echo $HARBOR_HOST
-          cd ${{ inputs.projectName }}
-          ls -la
-          helm version      
+          HARBOR_TOKEN: ${{ secrets.HARBOR_TOKEN }}
+          DOCKER_SERVER: ${{ secrets.HARBOR_HOST }}
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.HARBOR_TOKEN }}
+          DOCKER_EMAIL: royfuwei@gmail.com
+        with:
+          kubeconfig: '${{ secrets.KUBE_CONFIG }}'
+          overrule_existing_kubeconfig: "true"
+          exec: |
+            echo "Logging in to ${{ secrets.HARBOR_HOST }} ..."
+            helm registry login \
+              --username ${{ secrets.HARBOR_USERNAME }} \
+              --password ${{ secrets.HARBOR_TOKEN }} \
+              ${{ secrets.HARBOR_HOST }}
+            kubectl get pods
+            cd ${{ inputs.projectName }}
+            ls -la
+            echo $DOCKER_EMAIL
+            # ./deploy-secret.sh
+            # helm install ${{ inputs.projectName }} oci://$HARBOR_HOST/$HARBOR_USERNAME/${{ inputs.projectName }}
+
+      # - name: Deploy local k8s 
+      #   uses: neosec-com/kubectl-aws-eks@1.1.2
+      #   env:
+      #     KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG }}
+      #     HARBOR_HOST: ${{ secrets.HARBOR_HOST }}
+      #     HARBOR_USERNAME: ${{ secrets.HARBOR_USERNAME }}
+      #     HARBOR_TOKEN: ${{ secrets.HARBOR_TOKEN }}
+      #     DOCKER_SERVER: ${{ secrets.HARBOR_HOST }}
+      #     DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+      #     DOCKER_PASSWORD: ${{ secrets.HARBOR_TOKEN }}
+      #     DOCKER_EMAIL: royfuwei@gmail.com
+      #   with:
+      #     args: |
+      #       kubectl get pods
+      #       cd ${{ inputs.projectName }}
+      #       ls -la
+      #       ./deploy-secret.sh
+
+      # - name: Install Helm
+      #   uses: azure/setup-helm@v1
+      #   with:
+      #     version: 'latest'
+
+      # - name: Helm Registry Login
+      #   uses: pyTooling/Actions/with-post-step@v0.4.5
+      #   env:
+      #     KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG }}
+      #     HARBOR_HOST: ${{ secrets.HARBOR_HOST }}
+      #     HARBOR_USERNAME: ${{ secrets.HARBOR_USERNAME }}
+      #     HARBOR_TOKEN: ${{ secrets.HARBOR_TOKEN }}
+      #     DOCKER_SERVER: ${{ secrets.HARBOR_HOST }}
+      #     DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+      #     DOCKER_PASSWORD: ${{ secrets.HARBOR_TOKEN }}
+      #     DOCKER_EMAIL: royfuwei@gmail.com
+      #   with:
+      #     main: |
+      #       echo "Logging in to ${{ secrets.HARBOR_HOST }} ..."
+      #       helm registry login \
+      #         --username ${{ secrets.HARBOR_USERNAME }} \
+      #         --password ${{ secrets.HARBOR_TOKEN }} \
+      #         ${{ secrets.HARBOR_HOST }}
+      #       ls -la
+      #       kubectl get pods
+              
+
+      #     post: |
+      #       echo "Logging out of ${{ secrets.HARBOR_HOST }} ..."
+      #       helm registry logout ${{ secrets.HARBOR_HOST }}
