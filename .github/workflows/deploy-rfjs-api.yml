@@ -40,12 +40,6 @@ jobs:
         with:
           version: 3.14.0
 
-      # - name: Login to Harbor Registry
-      #   uses: central-x/helm-login-action@v1
-      #   with:
-      #     registry: ${{ secrets.HARBOR_HOST }}
-      #     username: ${{ secrets.HARBOR_USERNAME }}
-      #     password: ${{ secrets.HARBOR_TOKEN }}
       - uses: pyTooling/Actions/with-post-step@v0.4.5
         with:
           main: |
