@@ -3,6 +3,9 @@ name: Deploy Local RFJS API
 on:
   workflow_call:
     inputs:
+      projectName:
+        required: true
+        type: string
       config-path:
         description: 'Path to the configuration file'
         required: true
@@ -53,7 +56,7 @@ jobs:
             echo "Logging out of ${{ secrets.HARBOR_HOST }} ..."
             helm registry logout ${{ secrets.HARBOR_HOST }}
 
-      - name: Checkout
+      - name: Checkout Repository
         uses: actions/checkout@v3
         with:
           repository: royfuwei/rfjs-devops
@@ -66,7 +69,7 @@ jobs:
           HARBOR_USERNAME: ${{ secrets.HARBOR_USERNAME }}
         run: |
           echo $HARBOR_HOST
-          cd rfjs-api
-          tar zcvf rfjs-api.tgz helm
+          cd ${{ inputs.projectName }}
           ls -la
-          helm push rfjs-api.tgz oci://harbor.royfuwei.dev/royfuwei
+          tar zcvf ${{ inputs.projectName }}.tgz helm
+          helm push ${{ inputs.projectName }}.tgz oci://harbor.royfuwei.dev/royfuwei
