@@ -23,11 +23,12 @@ jobs:
     steps:
     - uses: actions/labeler@v4
       with:
-        repo-token: ${{ secrets.token }}
+        repo-token: ${{ secrets.envPAT }}
         configuration-path: ${{ inputs.config-path }}
         
   release-helm:
     runs-on: ubuntu-latest
+    needs: triage
     steps:
       - uses: actions/labeler@v4
         with:
@@ -46,9 +47,21 @@ jobs:
           username: ${{ secrets.HARBOR_USERNAME }}
           password: ${{ secrets.HARBOR_TOKEN }}
 
-      - name: Push Helm Chart
-        uses: central-x/helm-push-action@v1
+      - name: Checkout
+        uses: actions/checkout@v3
         with:
-          repository: oci:// ${{ secrets.HARBOR_HOST }}/${{ secrets.HARBOR_USERNAME }}
-          chart: ./rfjs-api
+          repository: royfuwei/rfjs-devops
+          fetch-depth: 0
+          token: ${{ secrets.envPAT }}
+
+      - name: Push Helm Chart
+        # uses: central-x/helm-push-action@v1
+        # with:
+        #   repository: oci:// ${{ secrets.HARBOR_HOST }}/${{ secrets.HARBOR_USERNAME }}
+        #   chart: ./rfjs-api
+        run: |
+          tar zcvf rfjs-api.tgz rfjs-api
+          ls -la
+          helm push rfjs-api.tgz oci://harbor.royfuwei.dev/royfuwei
+
       
