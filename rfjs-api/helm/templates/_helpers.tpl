@@ -70,3 +70,16 @@ Generate the env
   value: {{ $val | quote }}
 {{- end}}
 {{- end}}
+
+{{/*
+Generate the envSecret
+*/}}
+{{- define "envSecret" -}}
+{{- range $key := .Values.envSecrets }}
+- name: {{ $key }}
+  valueFrom:
+    secretKeyRef:
+      name: env-secret
+      key: {{ $key }}
+{{- end}}
+{{- end}}

@@ -40,12 +40,24 @@ jobs:
         with:
           version: 3.14.0
 
-      - name: Login to Harbor Registry
-        uses: central-x/helm-login-action@v1
+      # - name: Login to Harbor Registry
+      #   uses: central-x/helm-login-action@v1
+      #   with:
+      #     registry: ${{ secrets.HARBOR_HOST }}
+      #     username: ${{ secrets.HARBOR_USERNAME }}
+      #     password: ${{ secrets.HARBOR_TOKEN }}
+      - uses: pyTooling/Actions/with-post-step@v0.4.5
         with:
-          registry: ${{ secrets.HARBOR_HOST }}
-          username: ${{ secrets.HARBOR_USERNAME }}
-          password: ${{ secrets.HARBOR_TOKEN }}
+          main: |
+            echo "Logging in to ${{ secrets.HARBOR_HOST }} ..."
+            helm registry login \
+              --username ${{ secrets.HARBOR_USERNAME }} \
+              --password ${{ secrets.HARBOR_TOKEN }} \
+              ${{ secrets.HARBOR_HOST }}
+
+          post: |
+            echo "Logging out of ${{ secrets.HARBOR_HOST }} ..."
+            helm registry logout ${{ secrets.HARBOR_HOST }}
 
       - name: Checkout
         uses: actions/checkout@v3
@@ -55,13 +67,12 @@ jobs:
           token: ${{ secrets.envPAT }}
 
       - name: Push Helm Chart
-        # uses: central-x/helm-push-action@v1
-        # with:
-        #   repository: oci:// ${{ secrets.HARBOR_HOST }}/${{ secrets.HARBOR_USERNAME }}
-        #   chart: ./rfjs-api
+        env:
+          HARBOR_HOST: ${{ secrets.HARBOR_HOST }}
+          HARBOR_USERNAME: ${{ secrets.HARBOR_USERNAME }}
         run: |
-          tar zcvf rfjs-api.tgz rfjs-api
+          echo $HARBOR_HOST
+          cd rfjs-api
+          tar zcvf rfjs-api.tgz helm
           ls -la
           helm push rfjs-api.tgz oci://harbor.royfuwei.dev/royfuwei
-
-      
