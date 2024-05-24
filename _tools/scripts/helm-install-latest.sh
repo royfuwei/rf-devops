@@ -12,8 +12,8 @@ CHART_PATH="oci://$HARBOR_HOST/royfuwei/$PROJECT_NAME"
 
 if helm status "$RELEASE_NAME" > /dev/null 2>&1; then
   echo "Release $RELEASE_NAME exists. Upgrading..."
-  helm uninstall "$RELEASE_NAME"
+  helm upgrade "$RELEASE_NAME" "$CHART_PATH"
+else
+  echo "Release $RELEASE_NAME does not exist. Installing..."
+  helm install "$RELEASE_NAME" "$CHART_PATH"
 fi
-
-echo "Release $RELEASE_NAME Installing..."
-helm install "$RELEASE_NAME" "$CHART_PATH"

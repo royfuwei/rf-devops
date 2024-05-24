@@ -38,13 +38,9 @@ on:
 jobs:
   deploy-local-k8s:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
-            
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           repository: royfuwei/rfjs-devops
           fetch-depth: 0
@@ -72,7 +68,5 @@ jobs:
           overrule_existing_kubeconfig: "true"
           exec: |
             chmod 600 $HOME/.kube/config
-            cd ${{ inputs.projectName }}
-            ls -la
-            ./deploy-secret.sh
-            ./helm-install-latest.sh
+            ./${{ inputs.projectName }}/deploy-secret.sh
+            ./_tools/scripts/helm-install-latest.sh
