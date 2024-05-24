@@ -69,4 +69,4 @@ jobs:
           exec: |
             chmod 600 $HOME/.kube/config
             ./${{ inputs.projectName }}/deploy-secret.sh
-            ./_tools/scripts/helm-install-latest.sh
+            ./.scripts/helm-install-latest.sh
