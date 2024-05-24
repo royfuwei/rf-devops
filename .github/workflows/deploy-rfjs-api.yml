@@ -66,18 +66,13 @@ jobs:
           ENV_LINE_CHANNEL_SECRET: ${{ secrets.ENV_LINE_CHANNEL_SECRET }}
           ENV_LINE_NOTIFY_CLIENT_ID: ${{ secrets.ENV_LINE_NOTIFY_CLIENT_ID }}
           ENV_LINE_NOTIFY_CLIENT_SECRET: ${{ secrets.ENV_LINE_NOTIFY_CLIENT_SECRET }}
+          PROJECT_NAME: ${{ inputs.projectName }}
         with:
           kubeconfig: '${{ secrets.KUBE_CONFIG }}'
           overrule_existing_kubeconfig: "true"
           exec: |
-            echo "Logging in to ${{ secrets.HARBOR_HOST }} ..."
-            helm registry login \
-              --username ${{ secrets.HARBOR_USERNAME }} \
-              --password ${{ secrets.HARBOR_TOKEN }} \
-              ${{ secrets.HARBOR_HOST }}
-            kubectl get pods
+            chmod 600 $HOME/.kube/config
             cd ${{ inputs.projectName }}
             ls -la
             ./deploy-secret.sh
-            chmod 600 $HOME/.kube/config
-            helm install ${{ inputs.projectName }} oci://$HARBOR_HOST/royfuwei/${{ inputs.projectName }}
+            ./helm-install-latest.sh
