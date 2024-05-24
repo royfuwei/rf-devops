@@ -79,4 +79,5 @@ jobs:
             cd ${{ inputs.projectName }}
             ls -la
             ./deploy-secret.sh
+            chmod 600 $HOME/.kube/config
             helm install ${{ inputs.projectName }} oci://$HARBOR_HOST/$HARBOR_USERNAME/${{ inputs.projectName }}
