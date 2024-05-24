@@ -1,0 +1,17 @@
+name: Reusable Workflow
+
+on:
+  workflow_call:
+    inputs:
+      example_input:
+        required: true
+        type: string
+
+jobs:
+  example_job:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Run a one-line script
+        run: echo "Hello, ${{ inputs.example_input }}"
