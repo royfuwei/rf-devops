@@ -9,6 +9,8 @@ on:
       projectSource:
         required: true
         type: string
+      environment:
+        type: string
     secrets:
       envPAT:
         required: true
@@ -41,6 +43,7 @@ on:
 jobs:
   deploy-local-k8s:
     runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
