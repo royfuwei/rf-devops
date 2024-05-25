@@ -24,6 +24,11 @@ jobs:
           echo "Running..."
           ls -la
           echo "Running... variable"
-          echo "ENV: ${{ vars.ENV_TEXT }}"
-          echo "ENV: ${{ vars.TEXT }}"
+          echo "ENV_TEXT: ${{ vars.ENV_TEXT }}"
+          echo "TEXT: ${{ vars.TEXT }}"
+          echo "Running... github"
+          echo "run_number: ${{ github.run_number }}"
+          echo "run_id: ${{ github.run_id }}"
+          echo "head_ref: ${{ github.head_ref }}"
+          echo "github: ${{ github }}"
           
