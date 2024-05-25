@@ -1,0 +1,29 @@
+name: Invoke Reusable Workflow
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  test-flow:
+    uses: ./.github/workflows/_reusable-workflow.yml
+    with:
+      example_input: "World"
+        
+  test-env:
+    runs-on: ubuntu-latest
+    environment: test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Run echo value
+        run: |
+          echo "Running..."
+          ls -la
+          echo "Running... variable"
+          echo "ENV: ${{ vars.ENV_TEXT }}"
+          echo "ENV: ${{ vars.TEXT }}"
+          

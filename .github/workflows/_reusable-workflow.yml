@@ -3,15 +3,25 @@ name: Reusable Workflow
 on:
   workflow_call:
     inputs:
+      environment:
+        type: string
       example_input:
         required: true
         type: string
 
 jobs:
-  example_job:
+  dev_job:
     runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
     steps:
       - name: Checkout
         uses: actions/checkout@v2
       - name: Run a one-line script
         run: echo "Hello, ${{ inputs.example_input }}"
+      - name: Run echo value
+        run: |
+          echo "Running..."
+          ls -la
+          echo "Running... variable"
+          echo "ENV: ${{ vars.ENV_TEXT }}"
+          echo "ENV: ${{ vars.TEXT }}"
