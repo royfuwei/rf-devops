@@ -1,0 +1,46 @@
+name: SonarQube Scan
+
+on:
+  workflow_call:
+    inputs:
+      projectKey:
+        required: true
+        type: string
+      projectName:
+        required: true
+        type: string
+    secrets:
+      SONAR_HOST_URL:
+        required: true
+      SONAR_TOKEN:
+        required: true
+
+jobs:
+  sonarqube-scan:
+    # https://docs.sonarsource.com/sonarqube/10.5/devops-platform-integration/github-integration/introduction/
+    # https://docs.sonarsource.com/sonarqube/latest/devops-platform-integration/github-integration/monorepo/
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Disabling shallow clones is recommended for improving the relevancy of reporting
+          fetch-depth: 0
+      - name: Scan ${{ inputs.projectName }}
+        uses: sonarsource/sonarqube-scan-action@master
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        with:
+          args:
+              # Unique key of your project. You can find it in SonarQube > [my project] > Project Information (top-right menu)
+              # mandatory
+              -Dsonar.projectKey=${{ inputs.projectKey }}
+              -Dsonar.projectName=${{ inputs.projectName }}
+              # Comma-separated paths to directories containing main source files.
+              #-Dsonar.sources= # optional, default is project base directory
+              # When you need the analysis to take place in a directory other than the one from which it was launched
+              #-Dsonar.projectBaseDir= # optional, default is .
+              # Comma-separated paths to directories containing test source files.
+              #-Dsonar.tests= # optional. For more info about Code Coverage, please refer to https://docs.sonarcloud.io/enriching/test-coverage/overview/
+              # Adds more detail to both client and server-side analysis logs, activating DEBUG mode for the scanner, and adding client-side environment variables and system properties to the server-side log of analysis report processing.
+              #-Dsonar.verbose= # optional, default is false
