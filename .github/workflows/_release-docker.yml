@@ -1,0 +1,55 @@
+name: Deploy Local RFJS API
+
+on:
+  workflow_call:
+    inputs:
+      projectName:
+        required: true
+        type: string
+      projectSource:
+        required: true
+        type: string
+      version:
+        required: true
+        type: string
+      buildPath:
+        required: true
+        type: string
+    secrets:
+      HARBOR_HOST:
+        required: true
+      HARBOR_USERNAME:
+        required: true
+      HARBOR_TOKEN:
+        required: true
+      envPAT:
+        required: false
+
+jobs:
+  docker-build:
+    name: Docker build & publish - ${{ inputs.projectName }} ${{ inputs.version }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [20.x]
+
+    steps:
+      - name: Login to Harbor
+        uses: docker/login-action@v1
+        with:
+          registry: ${{ secrets.HARBOR_HOST }}
+          username: ${{ secrets.HARBOR_USERNAME }}
+          password: ${{ secrets.HARBOR_TOKEN }}
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.envPAT }}
+      - name: Build and push image
+        env:
+          HARBOR_HOST: ${{ secrets.HARBOR_HOST }}
+          PROJECT_NAME: ${{ inputs.projectName }}
+          PROJECT_SOURCE: ${{ inputs.projectSource }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          docker build -f ${{ inputs.buildPath }} . -t ${HARBOR_HOST}/${PROJECT_SOURCE}/${PROJECT_NAME}:${VERSION}
+          docker push ${HARBOR_HOST}/${PROJECT_SOURCE}/${PROJECT_NAME}:${VERSION}
