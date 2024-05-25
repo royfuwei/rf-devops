@@ -71,10 +71,10 @@ jobs:
           echo $HARBOR_HOST
           cd ${{ inputs.projectName }}
           ls -la
-          sed -i 's/'tag:' .*/'tag:' ${{ inputs.appVersion }}/g' ${{ inputs.projectName }}/values.yaml
-          sed -i 's/'appVersion:' .*/'appVersion:' ${{ inputs.appVersion }}/g' ${{ inputs.projectName }}/Chart.yaml
-          sed -i 's/'version:' .*/'version:' ${{ inputs.helmVersion }}/g' ${{ inputs.projectName }}/Chart.yaml
-          cat ${{ inputs.projectName }}/values.yaml
-          cat ${{ inputs.projectName }}/Chart.yaml
+          sed -i 's/'tag:' .*/'tag:' ${{ inputs.appVersion }}/g' ./helm/values.yaml
+          sed -i 's/'appVersion:' .*/'appVersion:' ${{ inputs.appVersion }}/g' ./helm/Chart.yaml
+          sed -i 's/'version:' .*/'version:' ${{ inputs.helmVersion }}/g' ./helm/Chart.yaml
+          cat ./helm/values.yaml
+          cat ./helm/Chart.yaml
           tar zcvf ${{ inputs.projectName }}.tgz helm
           helm push ${{ inputs.projectName }}.tgz oci://harbor.royfuwei.dev/${{ inputs.projectSource }}
