@@ -8,7 +8,7 @@ helm registry login \
 
 
 RELEASE_NAME="$PROJECT_NAME"
-CHART_PATH="oci://$HARBOR_HOST/royfuwei/$PROJECT_NAME"
+CHART_PATH="oci://$HARBOR_HOST/$PROJECT_SOURCE/$PROJECT_NAME"
 
 if helm status "$RELEASE_NAME" > /dev/null 2>&1; then
   echo "Release $RELEASE_NAME exists. Upgrading..."

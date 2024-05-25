@@ -6,6 +6,9 @@ on:
       projectName:
         required: true
         type: string
+      projectSource:
+        required: true
+        type: string
       config-path:
         description: 'Path to the configuration file'
         required: true
@@ -63,4 +66,4 @@ jobs:
           cd ${{ inputs.projectName }}
           ls -la
           tar zcvf ${{ inputs.projectName }}.tgz helm
-          helm push ${{ inputs.projectName }}.tgz oci://harbor.royfuwei.dev/royfuwei
+          helm push ${{ inputs.projectName }}.tgz oci://harbor.royfuwei.dev/${{ inputs.projectSource }}
