@@ -3,6 +3,8 @@ name: Deploy Local RFJS API
 on:
   workflow_call:
     inputs:
+      environment:
+        type: string
       projectName:
         required: true
         type: string
@@ -32,6 +34,7 @@ on:
 jobs:
   release-helm:
     runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
     steps:
       - uses: actions/labeler@v4
         with:

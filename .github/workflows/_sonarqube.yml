@@ -3,6 +3,8 @@ name: SonarQube Scan
 on:
   workflow_call:
     inputs:
+      environment:
+        type: string
       projectKey:
         required: true
         type: string
@@ -20,6 +22,7 @@ jobs:
     # https://docs.sonarsource.com/sonarqube/10.5/devops-platform-integration/github-integration/introduction/
     # https://docs.sonarsource.com/sonarqube/latest/devops-platform-integration/github-integration/monorepo/
     runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
     steps:
       - uses: actions/checkout@v4
         with:

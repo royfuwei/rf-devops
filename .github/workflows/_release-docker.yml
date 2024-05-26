@@ -3,6 +3,8 @@ name: Deploy Local RFJS API
 on:
   workflow_call:
     inputs:
+      environment:
+        type: string
       projectName:
         required: true
         type: string
@@ -28,6 +30,7 @@ on:
 jobs:
   docker-build:
     name: Docker build & publish - ${{ inputs.projectName }} ${{ inputs.version }}
+    environment: ${{ inputs.environment }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
