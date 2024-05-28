@@ -1,0 +1,79 @@
+name: Deploy Local k8s
+
+on:
+  workflow_call:
+    inputs:
+      projectName:
+        required: true
+        type: string
+      projectSource:
+        required: true
+        type: string
+      environment:
+        type: string
+    secrets:
+      envPAT:
+        required: true
+      KUBE_CONFIG:
+        required: true
+      HARBOR_HOST:
+        required: true
+      HARBOR_USERNAME:
+        required: true
+      HARBOR_TOKEN:
+        required: true
+      # env secrets
+      ENV_DB_MONGO_URI:
+        required: true
+      ENV_PUBLIC_SUPABASE_URL:
+        required: true
+      ENV_PUBLIC_SUPABASE_ANON_KEY:
+        required: true
+      ENV_LINE_CHANNEL_ID:
+        required: true
+      ENV_LINE_CHANNEL_ACCESS_TOKEN:
+        required: true
+      ENV_LINE_CHANNEL_SECRET:
+        required: true
+      ENV_LINE_NOTIFY_CLIENT_ID:
+        required: true
+      ENV_LINE_NOTIFY_CLIENT_SECRET:
+        required: true
+
+jobs:
+  deploy-local-k8s:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          repository: royfuwei/rf-devops
+          fetch-depth: 0
+          token: ${{ secrets.envPAT }}
+
+      - name: Deploy to Local k8s
+        uses: WyriHaximus/github-action-helm3@v3
+        env:
+          KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG }}
+          HARBOR_HOST: ${{ secrets.HARBOR_HOST }}
+          HARBOR_USERNAME: ${{ secrets.HARBOR_USERNAME }}
+          HARBOR_TOKEN: ${{ secrets.HARBOR_TOKEN }}
+          HARBOR_EMAIL: royfuwei@gmail.com
+          ENV_DB_MONGO_URI: ${{ secrets.ENV_DB_MONGO_URI }}
+          ENV_PUBLIC_SUPABASE_URL: ${{ secrets.ENV_PUBLIC_SUPABASE_URL }}
+          ENV_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.ENV_PUBLIC_SUPABASE_ANON_KEY }}
+          ENV_LINE_CHANNEL_ID: ${{ secrets.ENV_LINE_CHANNEL_ID }}
+          ENV_LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.ENV_LINE_CHANNEL_ACCESS_TOKEN }}
+          ENV_LINE_CHANNEL_SECRET: ${{ secrets.ENV_LINE_CHANNEL_SECRET }}
+          ENV_LINE_NOTIFY_CLIENT_ID: ${{ secrets.ENV_LINE_NOTIFY_CLIENT_ID }}
+          ENV_LINE_NOTIFY_CLIENT_SECRET: ${{ secrets.ENV_LINE_NOTIFY_CLIENT_SECRET }}
+          PROJECT_NAME: ${{ inputs.projectName }}
+          PROJECT_SOURCE: ${{ inputs.projectSource }}
+        with:
+          kubeconfig: '${{ secrets.KUBE_CONFIG }}'
+          overrule_existing_kubeconfig: "true"
+          exec: |
+            chmod 600 $HOME/.kube/config
+            ./${{ inputs.projectName }}/deploy-secret.sh
+            ./.scripts/helm-install-latest.sh
