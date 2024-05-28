@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "rfjs.fullname" . }}
+  name: {{ include "rfjs.fullname" . }}-api
   labels:
     {{- include "rfjs.labels" . | nindent 4 }}
 spec:
@@ -36,7 +36,7 @@ spec:
           imagePullPolicy: {{ .Values.apiImage.pullPolicy }}
           ports:
             - name: http
-              containerPort: {{ .Values.service.port }}
+              containerPort: {{ .Values.apiService.port }}
               protocol: TCP
           env:
             {{ include "env" . | indent 12 }}

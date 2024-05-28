@@ -36,7 +36,7 @@ spec:
           imagePullPolicy: {{ .Values.webImage.pullPolicy }}
           ports:
             - name: http
-              containerPort: {{ .Values.service.port }}
+              containerPort: {{ .Values.webService.port }}
               protocol: TCP
           # env:
           #   {{ include "env" . | indent 12 }}

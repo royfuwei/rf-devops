@@ -47,10 +47,15 @@ securityContext: {}
   # runAsNonRoot: true
   # runAsUser: 1000
 
-service:
+apiService:
   type: NodePort
   port: 8001
-  externalPort: 31011
+  externalPort: 31012
+
+webService:
+  type: NodePort
+  port: 8001
+  externalPort: 31013
 
 resources: {}
   # We usually recommend not to specify default resources and to leave this as a conscious
