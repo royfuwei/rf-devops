@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "weavcraft.fullname" . }}-api
+  name: "{{ include "weavcraft.fullname" . }}-api"
   labels:
     {{- include "weavcraft.labels" . | nindent 4 }}
 spec:
@@ -29,7 +29,7 @@ spec:
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
-        - name: {{ .Chart.Name }}
+        - name: "{{ .Chart.Name }}-api"
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.apiImage.repository }}:{{ .Values.apiImage.tag | default .Chart.AppVersion }}"

@@ -40,7 +40,7 @@ securityContext: {}
   # runAsNonRoot: true
   # runAsUser: 1000
 
-service:
+apiService:
   type: NodePort
   port: 8001
   externalPort: 41011
