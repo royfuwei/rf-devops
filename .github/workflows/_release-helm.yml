@@ -17,10 +17,6 @@ on:
       helmVersion:
         required: true
         type: string
-      config-path:
-        description: 'Path to the configuration file'
-        required: true
-        type: string
     secrets:
       HARBOR_HOST:
         required: true
@@ -36,11 +32,6 @@ jobs:
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
     steps:
-      - uses: actions/labeler@v4
-        with:
-          repo-token: ${{ secrets.envPAT }}
-          configuration-path: ${{ inputs.config-path }}
-
       - name: Helm Setup
         uses: azure/setup-helm@v3
         with:
@@ -62,7 +53,7 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v3
         with:
-          repository: royfuwei/rfjs-devops
+          repository: royfuwei/rf-devops
           fetch-depth: 0
           token: ${{ secrets.envPAT }}
 
