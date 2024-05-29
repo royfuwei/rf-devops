@@ -43,7 +43,7 @@ securityContext: {}
 apiService:
   type: NodePort
   port: 8001
-  externalPort: 41011
+  externalPort: 31101
 
 resources: {}
   # We usually recommend not to specify default resources and to leave this as a conscious
