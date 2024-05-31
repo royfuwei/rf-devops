@@ -2,14 +2,81 @@
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
-replicaCount: 1
+deployments:
+  - name: weavcraft-api
+    replicaCount: 1
+    autoscaling:
+      enabled: false
+      minReplicas: 1
+      maxReplicas: 100
+      targetCPUUtilizationPercentage: 80
+      # targetMemoryUtilizationPercentage: 80
+    image:
+      repository: harbor.royfuwei.dev/weavcraft/api
+      pullPolicy: Always
+      # pullPolicy: IfNotPresent
+      # Overrides the image tag whose default is the chart appVersion.
+      tag: "latest"
+    service:
+      type: NodePort
+      port: 8001
+      externalPort: 31101
+    env:
+      NODE_ENV: production
+      APP_API_PORT: '8001'
+      HOST: '0.0.0.0'
+    envSecrets:
+      - DB_MONGO_URI
+      - PUBLIC_SUPABASE_URL
+      - PUBLIC_SUPABASE_ANON_KEY
+      - JWT_SECRET
+      - JWT_EXPIRES_IN
+    # Additional volumes on the output Deployment definition.
+    volumes: []
+    # - name: foo
+    #   secret:
+    #     secretName: mysecret
+    #     optional: false
 
-apiImage:
-  repository: harbor.royfuwei.dev/weavcraft/api
-  pullPolicy: Always
-  # pullPolicy: IfNotPresent
-  # Overrides the image tag whose default is the chart appVersion.
-  tag: "latest"
+    # Additional volumeMounts on the output Deployment definition.
+    volumeMounts: []
+    # - name: foo
+    #   mountPath: "/etc/foo"
+    #   readOnly: true
+    resources: {}
+      # We usually recommend not to specify default resources and to leave this as a conscious
+      # choice for the user. This also increases chances charts run on environments with little
+      # resources, such as Minikube. If you do want to specify resources, uncomment the following
+      # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+      # limits:
+      #   cpu: 100m
+      #   memory: 128Mi
+      # requests:
+      #   cpu: 100m
+      #   memory: 128Mi
+  # - name: weavcraft-web
+  #   replicaCount: 1
+  #   autoscaling:
+  #     enabled: false
+  #     minReplicas: 1
+  #     maxReplicas: 100
+  #     targetCPUUtilizationPercentage: 80
+  #     # targetMemoryUtilizationPercentage: 80
+  #   image:
+  #     repository: harbor.royfuwei.dev/weavcraft/web
+  #     pullPolicy: Always
+  #     tag: "latest"
+  #   service:
+  #     type: NodePort
+  #     port: 3000
+  #     externalPort: 31102
+  #   env:
+  #   envSecrets:
+  #   # Additional volumes on the output Deployment definition.
+  #   volumes: []
+  #   # Additional volumeMounts on the output Deployment definition.
+  #   volumeMounts: []
+  #   resources: {}
 
 imagePullSecrets: []
 nameOverride: ""
@@ -40,57 +107,8 @@ securityContext: {}
   # runAsNonRoot: true
   # runAsUser: 1000
 
-apiService:
-  type: NodePort
-  port: 8001
-  externalPort: 31101
-
-resources: {}
-  # We usually recommend not to specify default resources and to leave this as a conscious
-  # choice for the user. This also increases chances charts run on environments with little
-  # resources, such as Minikube. If you do want to specify resources, uncomment the following
-  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
-  # limits:
-  #   cpu: 100m
-  #   memory: 128Mi
-  # requests:
-  #   cpu: 100m
-  #   memory: 128Mi
-
-autoscaling:
-  enabled: false
-  minReplicas: 1
-  maxReplicas: 100
-  targetCPUUtilizationPercentage: 80
-  # targetMemoryUtilizationPercentage: 80
-
-# Additional volumes on the output Deployment definition.
-volumes: []
-# - name: foo
-#   secret:
-#     secretName: mysecret
-#     optional: false
-
-# Additional volumeMounts on the output Deployment definition.
-volumeMounts: []
-# - name: foo
-#   mountPath: "/etc/foo"
-#   readOnly: true
-
 nodeSelector: {}
 
 tolerations: []
 
 affinity: {}
-
-envSecrets:
-  - DB_MONGO_URI
-  - PUBLIC_SUPABASE_URL
-  - PUBLIC_SUPABASE_ANON_KEY
-  - JWT_SECRET
-  - JWT_EXPIRES_IN
-
-args:
-  NODE_ENV: production
-  APP_API_PORT: '8001'
-  HOST: '0.0.0.0'
