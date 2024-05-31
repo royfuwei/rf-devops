@@ -1,8 +1,15 @@
 name: Deploy to Render
 
+# on:
+#   repository_dispatch:
+#     types: [deploy-trigger]
 on:
-  repository_dispatch:
-    types: [deploy-trigger]
+  workflow_call:
+    secrets:
+      RENDER_DEPLOY_HOOK_KEY:
+        required: true
+      RENDER_DEPLOY_SERVICE_KEY:
+        required: true
 
 jobs:
   deploy:
