@@ -1,18 +1,19 @@
-name: Deploy Local k8s
+name: CD flow - Deploy local
 
 on:
   workflow_call:
     inputs:
-      projectName:
-        required: true
-        type: string
-      projectSource:
-        required: true
-        type: string
       environment:
+        required: true
         type: string
+      appVersion:
+        type: string
+        default: latest
+      helmVersion:
+        type: string
+        default: 0.0.1
     secrets:
-      envPAT:
+      GIT_TOKEN:
         required: true
       KUBE_CONFIG:
         required: true
@@ -35,7 +36,40 @@ on:
         required: true
 
 jobs:
-  deploy-local-k8s:
+  docker-build-api:
+    name: Docker release - weavcraft/api:${{ inputs.appVersion }}
+    uses: ./.github/workflows/_release-docker.yml
+    with:
+      projectName: api
+      projectSource: weavcraft
+      version: ${{ inputs.appVersion }}
+      buildPath: apps/api/Dockerfile
+      environment: ${{ inputs.environment }}
+    secrets:
+      HARBOR_HOST: ${{ secrets.HARBOR_HOST }}
+      HARBOR_USERNAME: ${{ secrets.HARBOR_USERNAME }}
+      HARBOR_TOKEN: ${{ secrets.HARBOR_TOKEN }}
+      envPAT: ${{ secrets.envPAT }}
+
+  helm-release:
+    needs: [docker-build-api]
+    name: Helm release - weavcraft:${{ inputs.helmVersion}}
+    uses: ./.github/workflows/_release-helm.yml
+    with:
+      projectName: weavcraft
+      projectSource: weavcraft
+      appVersion: ${{ inputs.appVersion }}
+      helmVersion: ${{ inputs.helmVersion }}
+      environment: ${{ inputs.environment }}
+    secrets:
+      HARBOR_HOST: ${{ secrets.HARBOR_HOST }}
+      HARBOR_USERNAME: ${{ secrets.HARBOR_USERNAME }}
+      HARBOR_TOKEN: ${{ secrets.HARBOR_TOKEN }}
+      envPAT: ${{ secrets.envPAT }}
+
+  deploy-weavcraft:
+    name: Deploy helm
+    needs: helm-release
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
     steps:
@@ -44,7 +78,7 @@ jobs:
         with:
           repository: royfuwei/rf-devops
           fetch-depth: 0
-          token: ${{ secrets.envPAT }}
+          token: ${{ secrets.GIT_TOKEN }}
 
       - name: Deploy to Local k8s
         uses: WyriHaximus/github-action-helm3@v3
@@ -59,12 +93,13 @@ jobs:
           ENV_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.ENV_PUBLIC_SUPABASE_ANON_KEY }}
           ENV_JWT_SECRET: ${{ secrets.ENV_JWT_SECRET }}
           ENV_JWT_EXPIRES_IN: ${{ secrets.ENV_JWT_EXPIRES_IN }}
-          PROJECT_NAME: ${{ inputs.projectName }}
-          PROJECT_SOURCE: ${{ inputs.projectSource }}
+          PROJECT_NAME: weavcraft
+          PROJECT_SOURCE: weavcraft
         with:
           kubeconfig: '${{ secrets.KUBE_CONFIG }}'
           overrule_existing_kubeconfig: "true"
           exec: |
             chmod 600 $HOME/.kube/config
-            ./${{ inputs.projectName }}/deploy-secret.sh
+            ./weavcraft/deploy-secret.sh
             ./.scripts/helm-install-latest.sh
+      
