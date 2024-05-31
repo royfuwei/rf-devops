@@ -1,18 +1,19 @@
-name: Deploy Local k8s
+name: Deploy local k8s
 
 on:
   workflow_call:
     inputs:
-      projectName:
-        required: true
+      appVersion:
         type: string
-      projectSource:
-        required: true
+        default: latest
+      helmVersion:
         type: string
+        default: 0.0.1
       environment:
         type: string
+        default: k8s-rfjs
     secrets:
-      envPAT:
+      GIT_TOKEN:
         required: true
       KUBE_CONFIG:
         required: true
@@ -41,7 +42,55 @@ on:
         required: true
 
 jobs:
-  deploy-local-k8s:
+  docker-build-api:
+    name: Docker release - rfjs-api:${{ inputs.appVersion }}
+    uses: ./.github/workflows/_release-docker.yml
+    with:
+      projectName: rfjs-api
+      projectSource: royfuwei
+      version: ${{ inputs.appVersion }}
+      buildPath: apps/api/Dockerfile
+      environment: ${{ inputs.environment }}
+    secrets:
+      HARBOR_HOST: ${{ secrets.HARBOR_HOST }}
+      HARBOR_USERNAME: ${{ secrets.HARBOR_USERNAME }}
+      HARBOR_TOKEN: ${{ secrets.HARBOR_TOKEN }}
+      envPAT: ${{ secrets.GIT_TOKEN }}
+      
+  docker-build-web:
+    name: Docker release - rfjs-web:${{ inputs.appVersion }}
+    uses: ./.github/workflows/_release-docker.yml
+    with:
+      projectName: rfjs-web
+      projectSource: royfuwei
+      version: ${{ inputs.appVersion }}
+      buildPath: apps/web/Dockerfile
+      environment: ${{ inputs.environment }}
+    secrets:
+      HARBOR_HOST: ${{ secrets.HARBOR_HOST }}
+      HARBOR_USERNAME: ${{ secrets.HARBOR_USERNAME }}
+      HARBOR_TOKEN: ${{ secrets.HARBOR_TOKEN }}
+      envPAT: ${{ secrets.GIT_TOKEN }}
+
+  helm-release:
+    needs: [docker-build-api, docker-build-web]
+    name: Helm release - rfjs:${{ inputs.helmVersion }}
+    uses: ./.github/workflows/_release-helm.yml
+    with:
+      projectName: rfjs
+      projectSource: royfuwei
+      appVersion: ${{ inputs.appVersion }}
+      helmVersion: ${{ inputs.helmVersion }}
+      environment: ${{ inputs.environment }}
+    secrets:
+      HARBOR_HOST: ${{ secrets.HARBOR_HOST }}
+      HARBOR_USERNAME: ${{ secrets.HARBOR_USERNAME }}
+      HARBOR_TOKEN: ${{ secrets.HARBOR_TOKEN }}
+      envPAT: ${{ secrets.GIT_TOKEN }}
+
+  deploy-rfjs:
+    needs: helm-release
+    name: Deploy rfjs helm:${{ inputs.helmVersion }}
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
     steps:
@@ -50,11 +99,13 @@ jobs:
         with:
           repository: royfuwei/rf-devops
           fetch-depth: 0
-          token: ${{ secrets.envPAT }}
+          token: ${{ secrets.GIT_TOKEN }}
 
       - name: Deploy to Local k8s
         uses: WyriHaximus/github-action-helm3@v3
         env:
+          PROJECT_NAME: rfjs
+          PROJECT_SOURCE: royfuwei
           KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG }}
           HARBOR_HOST: ${{ secrets.HARBOR_HOST }}
           HARBOR_USERNAME: ${{ secrets.HARBOR_USERNAME }}
@@ -68,12 +119,10 @@ jobs:
           ENV_LINE_CHANNEL_SECRET: ${{ secrets.ENV_LINE_CHANNEL_SECRET }}
           ENV_LINE_NOTIFY_CLIENT_ID: ${{ secrets.ENV_LINE_NOTIFY_CLIENT_ID }}
           ENV_LINE_NOTIFY_CLIENT_SECRET: ${{ secrets.ENV_LINE_NOTIFY_CLIENT_SECRET }}
-          PROJECT_NAME: ${{ inputs.projectName }}
-          PROJECT_SOURCE: ${{ inputs.projectSource }}
         with:
           kubeconfig: '${{ secrets.KUBE_CONFIG }}'
           overrule_existing_kubeconfig: "true"
           exec: |
             chmod 600 $HOME/.kube/config
-            ./${{ inputs.projectName }}/deploy-secret.sh
+            ./rfjs/deploy-secret.sh
             ./.scripts/helm-install-latest.sh
