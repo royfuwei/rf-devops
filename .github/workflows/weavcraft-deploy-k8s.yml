@@ -49,7 +49,7 @@ jobs:
       HARBOR_HOST: ${{ secrets.HARBOR_HOST }}
       HARBOR_USERNAME: ${{ secrets.HARBOR_USERNAME }}
       HARBOR_TOKEN: ${{ secrets.HARBOR_TOKEN }}
-      envPAT: ${{ secrets.envPAT }}
+      envPAT: ${{ secrets.GIT_TOKEN }}
 
   helm-release:
     needs: [docker-build-api]
@@ -65,7 +65,7 @@ jobs:
       HARBOR_HOST: ${{ secrets.HARBOR_HOST }}
       HARBOR_USERNAME: ${{ secrets.HARBOR_USERNAME }}
       HARBOR_TOKEN: ${{ secrets.HARBOR_TOKEN }}
-      envPAT: ${{ secrets.envPAT }}
+      envPAT: ${{ secrets.GIT_TOKEN }}
 
   deploy-weavcraft:
     name: Deploy helm
