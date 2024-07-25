@@ -56,6 +56,21 @@ jobs:
       HARBOR_USERNAME: ${{ secrets.HARBOR_USERNAME }}
       HARBOR_TOKEN: ${{ secrets.HARBOR_TOKEN }}
       envPAT: ${{ secrets.GIT_TOKEN }}
+
+  docker-build-gql:
+    name: Docker release - rfjs-gql:${{ inputs.appVersion }}
+    uses: ./.github/workflows/_release-docker.yml
+    with:
+      projectName: rfjs-gql
+      projectSource: royfuwei
+      version: ${{ inputs.appVersion }}
+      buildPath: apps/gql/Dockerfile
+      environment: ${{ inputs.environment }}
+    secrets:
+      HARBOR_HOST: ${{ secrets.HARBOR_HOST }}
+      HARBOR_USERNAME: ${{ secrets.HARBOR_USERNAME }}
+      HARBOR_TOKEN: ${{ secrets.HARBOR_TOKEN }}
+      envPAT: ${{ secrets.GIT_TOKEN }}
       
   docker-build-web:
     name: Docker release - rfjs-web:${{ inputs.appVersion }}
@@ -73,7 +88,7 @@ jobs:
       envPAT: ${{ secrets.GIT_TOKEN }}
 
   helm-release:
-    needs: [docker-build-api, docker-build-web]
+    needs: [docker-build-api, docker-build-gql, docker-build-web]
     name: Helm release - rfjs:${{ inputs.helmVersion }}
     uses: ./.github/workflows/_release-helm.yml
     with:
