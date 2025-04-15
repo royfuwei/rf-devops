@@ -39,17 +39,12 @@ jobs:
           node-version: ${{ matrix.node-version }}
           cache: 'pnpm'
           
-
-      - name: Initialization
-        id: init
+      - name: Update Version
         run: |
           git config --global user.email royfuwei@gmail.com
           git config --global user.name royfuwei
           pnpm -v
           pnpm install --frozen-lockfile
-
-      - name: Update Version
-        run: |
           npx standard-version
       
       - name: Release Tag
