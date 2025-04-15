@@ -1,0 +1,104 @@
+name: Release nx projects
+
+on:
+  workflow_call:
+    secrets:
+      GIT_TOKEN:
+        required: true
+    outputs:
+        current-version:
+          value: ${{ jobs.standard-version.outputs.current-version }}
+
+jobs:
+  standard-version:
+    name: Run standard-version
+    runs-on: ubuntu-latest
+    # environment: actions
+    outputs:
+      current-version: ${{ steps.version.outputs.current-version }}
+    strategy:
+      matrix:
+        node-version: [20.x]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GIT_TOKEN }}
+
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+
+      - name: Initialization
+        id: init
+        run: |
+          git config --global user.email royfuwei@gmail.com
+          git config --global user.name royfuwei
+
+      - name: Update Version
+        run: |
+          npx standard-version --skip.tag
+          git push origin HEAD:production -f
+
+      - name: Get Package Version
+        id: version
+        uses: martinbeentjes/npm-get-version-action@v1.3.1
+
+  release:
+    needs: standard-version
+    name: Release
+    runs-on: ubuntu-latest
+    # environment: actions
+    strategy:
+      matrix:
+        node-version: [20.x]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GIT_TOKEN }}
+
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+
+      - name: Derive appropriate SHAs for base and head for `nx affected` commands
+        id: 'setSHAs'
+        uses: nrwl/nx-set-shas@v3
+        with:
+          main-branch-name: production
+
+      - name: Initialization
+        id: init
+        run: |
+          git config --global user.email royfuwei@gmail.com
+          git config --global user.name royfuwei
+          git pull
+          npm ci
+
+      - name: Get Package Version
+        id: version
+        uses: martinbeentjes/npm-get-version-action@v1.3.1
+
+      - name: Release Tag
+        run: |
+          git tag \
+            -f \
+            -a "v${{ steps.version.outputs.current-version }}" \
+            -m "$( \
+              npx nx show projects \
+                --affected \
+                --withTarget=build \
+                --base=${{ steps.setSHAs.outputs.base }} \
+                --head=${{ steps.setSHAs.outputs.head }} \
+            )"
+
+          git push --tags origin HEAD:production
