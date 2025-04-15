@@ -6,8 +6,8 @@ on:
       GIT_TOKEN:
         required: true
     outputs:
-        current-version:
-          value: ${{ jobs.standard-version.outputs.current-version }}
+        release-version:
+          value: ${{ jobs.release.outputs.release-version }}
 
 jobs:
   release:
@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     # environment: actions
     outputs:
-      current-version: ${{ steps.version.outputs.current-version }}
+      release-version: ${{ steps.version.outputs.current-version }}
     strategy:
       matrix:
         node-version: [20.x]
