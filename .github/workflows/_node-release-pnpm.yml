@@ -41,14 +41,15 @@ jobs:
           
       - name: Update Version
         run: |
+          export CI=true
           git config --global user.email royfuwei@gmail.com
           git config --global user.name royfuwei
           pnpm -v
           pnpm install --frozen-lockfile
-          npx standard-version
       
       - name: Release Tag
         run: |
+          npx standard-version
           git push --follow-tags origin HEAD:production -f
 
       - name: Get Package Version
