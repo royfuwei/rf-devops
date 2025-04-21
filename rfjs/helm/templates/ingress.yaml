@@ -4,7 +4,7 @@ kind: Ingress
 metadata:
   name: {{ include "proj.name" . }}-ingress
   labels:
-    app.kubernetes.io/name: {{ include "proj.name" . }}-ingress
+    app.kubernetes.io/name: {{ include "proj.name" . }}
     {{- include "proj.selectorLabels" . | nindent 4 }}
     {{- include "proj.labels" . | nindent 4 }}
   annotations:
@@ -26,13 +26,13 @@ spec:
                   number: {{ .servicePort }}
           {{- end }}
     {{- end }}
-  # tls:
-  #   {{- if .Values.ingress.tls.enabled }}
-  #   - hosts:
-  #       {{- range .Values.ingress }}  # 循環部署來設置 TLS 主機
-  #       {{- $ingress := . }}  # 循環遍歷 deployments 配置
-  #       - {{ .host | quote }}
-  #       {{- end }}
-  #     secretName: {{ .Values.ingress.tls.secretName | quote }}  # 使用的 TLS 憑證
-  #   {{- end }}
+  tls:
+    {{- if .Values.ingress.tls.enabled }}
+    - hosts:
+        {{- range .Values.ingress }}  # 循環部署來設置 TLS 主機
+        {{- $ingress := . }}  # 循環遍歷 deployments 配置
+        - {{ .host | quote }}
+        {{- end }}
+      secretName: {{ .Values.ingress.tls.secretName | quote }}  # 使用的 TLS 憑證
+    {{- end }}
 {{- end }}
