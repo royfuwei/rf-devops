@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rfjs-ingress
+  labels:
+    app.kubernetes.io/name: {{ include "proj.name" . }}-ingress
+    {{- include "proj.labels" $ | nindent 4 }}
+  # namespace: ingress-nginx
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "proj.name" . }}-ingress
+      {{- include "proj.selectorLabels" $ | nindent 6 }}
+  template:
+    metadata:
+      # labels:
+      #   app: nginx-ingress-controller
+      labels:
+        app.kubernetes.io/name: {{ include "proj.name" . }}-ingress
+        {{- include "proj.labels" $ | nindent 8 }}
+        # {{- with $.Values.podLabels }}
+        # {{- toYaml . | nindent 8 }}
+        # {{- end }}
+    spec:
+    spec:
+      containers:
+        - name: nginx-ingress-controller
+          image: quay.io/kubernetes-ingress-controller/nginx-ingress-controller:latest
+          ports:
+            - containerPort: 80
+            - containerPort: 443

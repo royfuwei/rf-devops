@@ -18,7 +18,7 @@ deployments:
       # Overrides the image tag whose default is the chart appVersion.
       tag: "latest"
     service:
-      type: NodePort
+      type: ClusterIP
       port: 8001
       externalPort: 31011
     env:
@@ -72,7 +72,7 @@ deployments:
       # Overrides the image tag whose default is the chart appVersion.
       tag: "latest"
     service:
-      type: NodePort
+      type: ClusterIP
       port: 8002
       externalPort: 31012
     env:
@@ -124,7 +124,7 @@ deployments:
       pullPolicy: Always
       tag: "latest"
     service:
-      type: NodePort
+      type: ClusterIP
       port: 3000
       externalPort: 31013
     env:
@@ -135,6 +135,30 @@ deployments:
     volumeMounts: []
     resources: {}
 
+ingress:
+  enabled: true
+  annotations:
+    kubernetes.io/ingress.class: nginx
+  hosts:
+    - host: rfjs-api.royfuwei.dev
+      paths:
+        - path: /
+          pathType: Prefix
+          serviceName: rfjs-api
+          servicePort: 8001
+    - host: rfjs-gql.royfuwei.dev
+      paths:
+        - path: /
+          pathType: Prefix
+          serviceName: rfjs-gql
+          servicePort: 8002
+    - host: rfjs-web.royfuwei.dev
+      paths:
+        - path: /
+          pathType: Prefix
+          serviceName: rfjs-web
+          servicePort: 3000
+          
 imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
