@@ -1,11 +1,20 @@
 #!/bin/bash
 
+echo "namespace: $NAMESPACE"
+
+if [ -z "$NAMESPACE" ]; then
+  echo "NAMESPACE is not set. Using default namespace."
+  NAMESPACE="default"
+fi
+
 # env-secret
 ENV_SECRET_NAME="env-secret"
 SECRET_NAME="harbor-registry-secret"
 
+kubectl create namespace $NAMESPACE
+
 # 尝试创建 secret
-kubectl create secret docker-registry $SECRET_NAME \
+kubectl create secret docker-registry $SECRET_NAME -n $NAMESPACE \
   --docker-server=$HARBOR_HOST \
   --docker-username=$HARBOR_USERNAME \
   --docker-password=$HARBOR_TOKEN \
@@ -14,12 +23,12 @@ kubectl create secret docker-registry $SECRET_NAME \
 # check
 if [ $? -ne 0 ]; then
   # failed has "already exists"
-  if kubectl get secret $SECRET_NAME >/dev/null 2>&1; then
+  if kubectl get secret $SECRET_NAME -n $NAMESPACE >/dev/null 2>&1; then
     echo "Secret '$SECRET_NAME' already exists. Deleting and recreating..."
     # delete secret
-    kubectl delete secret $SECRET_NAME
+    kubectl delete secret $SECRET_NAME -n $NAMESPACE
     # retry create secret
-    kubectl create secret docker-registry $SECRET_NAME \
+    kubectl create secret docker-registry $SECRET_NAME -n $NAMESPACE \
       --docker-server=$HARBOR_HOST \
       --docker-username=$HARBOR_USERNAME \
       --docker-password=$HARBOR_TOKEN \
@@ -36,7 +45,7 @@ else
   echo "Secret '$SECRET_NAME' created successfully."
 fi
 
-kubectl create secret generic $ENV_SECRET_NAME \
+kubectl create secret generic $ENV_SECRET_NAME -n $NAMESPACE \
   --from-literal=DB_MONGO_URI=$ENV_DB_MONGO_URI \
   --from-literal=PUBLIC_SUPABASE_URL=$ENV_PUBLIC_SUPABASE_URL \
   --from-literal=PUBLIC_SUPABASE_ANON_KEY=$ENV_PUBLIC_SUPABASE_ANON_KEY \
@@ -50,12 +59,12 @@ kubectl create secret generic $ENV_SECRET_NAME \
 # check
 if [ $? -ne 0 ]; then
   # failed has "already exists"
-  if kubectl get secret $ENV_SECRET_NAME >/dev/null 2>&1; then
+  if kubectl get secret $ENV_SECRET_NAME -n $NAMESPACE >/dev/null 2>&1; then
     echo "Secret '$ENV_SECRET_NAME' already exists. Deleting and recreating..."
     # delete secret
-    kubectl delete secret $ENV_SECRET_NAME
+    kubectl delete secret $ENV_SECRET_NAME -n $NAMESPACE
     # retry create secret
-    kubectl create secret generic $ENV_SECRET_NAME \
+    kubectl create secret generic $ENV_SECRET_NAME -n $NAMESPACE \
       --from-literal=DB_MONGO_URI=$ENV_DB_MONGO_URI \
       --from-literal=PUBLIC_SUPABASE_URL=$ENV_PUBLIC_SUPABASE_URL \
       --from-literal=PUBLIC_SUPABASE_ANON_KEY=$ENV_PUBLIC_SUPABASE_ANON_KEY \
