@@ -1,10 +1,20 @@
 #!/bin/bash
+set -euo pipefail
 
-echo "namespace: $NAMESPACE"
-
-if [ -z "$NAMESPACE" ]; then
+# 1. 預設 namespace
+if [ -z "${NAMESPACE:-}" ]; then
   echo "NAMESPACE is not set. Using default namespace."
   NAMESPACE="default"
+fi
+echo "Using namespace: $NAMESPACE"
+
+
+# 1-2. 確保 namespace 存在（idempotent）
+if ! kubectl get namespace "$NAMESPACE" &>/dev/null; then
+  echo "🔸 Namespace '$NAMESPACE' not found. Creating..."
+  kubectl create namespace "$NAMESPACE"
+else
+  echo "🔸 Namespace '$NAMESPACE' already exists."
 fi
 
 # env-secret
