@@ -137,13 +137,6 @@ deployments:
 
 ingress:
   enabled: true
-  targetPort:
-    - name: http
-      port: 80
-      targetPort: 31012
-    - name: https
-      port: 443
-      targetPort: 31012
   tls:
     enabled: false
     secretName: rfjs-tls-secret  # 使用的 TLS 憑證
