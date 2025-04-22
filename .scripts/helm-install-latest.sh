@@ -15,7 +15,6 @@ helm registry login \
   --username $HARBOR_USERNAME \
   --password $HARBOR_TOKEN \
   --namespace $NAMESPACE \
-  --create-namespace \
   $HARBOR_HOST
 
 if helm status "$RELEASE_NAME" > /dev/null 2>&1; then
