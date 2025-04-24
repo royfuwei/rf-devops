@@ -14,7 +14,7 @@ on:
         default: k8s-rfjs
       namespace:
         type: string
-        default: development
+        default: rfjs
     secrets:
       GIT_TOKEN:
         required: true

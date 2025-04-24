@@ -148,19 +148,19 @@ ingress:
     nginx.ingress.kubernetes.io/proxy-send-timeout: '600'
     nginx.ingress.kubernetes.io/use-regex: 'true'
   hosts:
-    - host: rfjs-api.royfuwei.dev
+    - host: rfjs.api.royfuwei.dev
       paths:
         - path: /
           pathType: Prefix
           serviceName: rfjs-api
           servicePort: 8001
-    - host: rfjs-gql.royfuwei.dev
+    - host: rfjs.gql.royfuwei.dev
       paths:
         - path: /
           pathType: Prefix
           serviceName: rfjs-gql
           servicePort: 8002
-    - host: rfjs-web.royfuwei.dev
+    - host: rfjs.web.royfuwei.dev
       paths:
         - path: /
           pathType: Prefix
