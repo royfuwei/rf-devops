@@ -151,7 +151,7 @@ ingress:
     nginx.ingress.kubernetes.io/proxy-send-timeout: '600'
     nginx.ingress.kubernetes.io/use-regex: 'true'
   hosts:
-    - host: test.api.royfuwei.dev
+    - host: rfjs.test.royfuwei.dev
       paths:
         - path: /
           pathType: Prefix
