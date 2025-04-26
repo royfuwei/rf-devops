@@ -11,7 +11,7 @@ on:
         default: 0.0.1
       environment:
         type: string
-        default: k8s-rfjs
+        default: k8s-royfuwei
       namespace:
         type: string
         default: rfjs
