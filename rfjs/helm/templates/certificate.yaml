@@ -2,7 +2,11 @@ apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
   name: {{ .Values.ingress.tls.secretName }}
-  # namespace: {{ .Release.Namespace }}
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    "meta.helm.sh/release-name": {{ .Release.Name | quote }}
+    "meta.helm.sh/release-namespace": {{ .Release.Namespace | quote }}
+    "helm.sh/resource-policy": keep
 spec:
   secretName: {{ .Values.ingress.tls.secretName }}
   issuerRef:
