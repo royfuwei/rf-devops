@@ -29,9 +29,8 @@ spec:
   tls:
     {{- if .Values.ingress.tls.enabled }}
     - hosts:
-        {{- range .Values.ingress }}  # 循環部署來設置 TLS 主機
-        {{- $ingress := . }}  # 循環遍歷 deployments 配置
-        - {{ .host | quote }}
+        {{- range .Values.ingress.hosts }}  # 循環部署來設置 TLS 主機
+        - {{ .host | quote }} # 循環遍歷 deployments 配置
         {{- end }}
       secretName: {{ .Values.ingress.tls.secretName | quote }}  # 使用的 TLS 憑證
     {{- end }}
