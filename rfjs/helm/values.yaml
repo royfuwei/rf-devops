@@ -138,9 +138,12 @@ deployments:
 ingress:
   enabled: true
   tls:
-    enabled: false
+    enabled: true
     secretName: rfjs-tls-secret  # 使用的 TLS 憑證
-    certManager: true
+    certManager:
+      enabled: true   # ✅ 改成底下是一個物件，這樣 template 可以用
+      issuerType: cluster-issuer  # "issuer" or "cluster-issuer"
+      issuerName: letsencrypt-dns
   annotations:
     kubernetes.io/ingress.class: nginx
     nginx.ingress.kubernetes.io/proxy-body-size: '0'
@@ -148,6 +151,12 @@ ingress:
     nginx.ingress.kubernetes.io/proxy-send-timeout: '600'
     nginx.ingress.kubernetes.io/use-regex: 'true'
   hosts:
+    - host: test.api.royfuwei.dev
+      paths:
+        - path: /
+          pathType: Prefix
+          serviceName: rfjs-api
+          servicePort: 8001
     - host: rfjs.api.royfuwei.dev
       paths:
         - path: /

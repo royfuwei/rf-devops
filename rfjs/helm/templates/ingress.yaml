@@ -9,14 +9,24 @@ metadata:
     {{- include "proj.labels" . | nindent 4 }}
   annotations:
     {{- toYaml .Values.ingress.annotations | nindent 4 }}
+    {{- if and .Values.ingress.tls.enabled .Values.ingress.tls.certManager.enabled }}
+    cert-manager.io/{{ .Values.ingress.tls.certManager.issuerType }}: {{ .Values.ingress.tls.certManager.issuerName | quote }}
+    {{- end }}
 spec:
+  {{- if .Values.ingress.tls.enabled }}
+  tls:
+    - hosts:
+        {{- range .Values.ingress.hosts }}
+        - {{ .host | quote }}
+        {{- end }}
+      secretName: {{ .Values.ingress.tls.secretName | quote }}
+  {{- end }}
   rules:
-    {{- range .Values.ingress.hosts }}  # 循環遍歷 deployments 配置
-    {{- $hosts := . }}  # 循環遍歷 deployments 配置
+    {{- range .Values.ingress.hosts }}
     - host: {{ .host | quote }}
       http:
         paths:
-          {{- range .paths }}  # 遍歷 paths 配置
+          {{- range .paths }}
           - path: {{ .path | quote }}
             pathType: {{ .pathType | quote }}
             backend:
@@ -25,13 +35,5 @@ spec:
                 port:
                   number: {{ .servicePort }}
           {{- end }}
-    {{- end }}
-  tls:
-    {{- if .Values.ingress.tls.enabled }}
-    - hosts:
-        {{- range .Values.ingress.hosts }}  # 循環部署來設置 TLS 主機
-        - {{ .host | quote }} # 循環遍歷 deployments 配置
-        {{- end }}
-      secretName: {{ .Values.ingress.tls.secretName | quote }}  # 使用的 TLS 憑證
     {{- end }}
 {{- end }}
