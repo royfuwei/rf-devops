@@ -145,7 +145,7 @@ ingress:
       issuerType: cluster-issuer  # "issuer" or "cluster-issuer"
       issuerName: letsencrypt-dns
   annotations:
-    kubernetes.io/ingress.class: nginx
+    spec.ingressClassName: nginx
     nginx.ingress.kubernetes.io/proxy-body-size: '0'
     nginx.ingress.kubernetes.io/proxy-read-timeout: '600'
     nginx.ingress.kubernetes.io/proxy-send-timeout: '600'
