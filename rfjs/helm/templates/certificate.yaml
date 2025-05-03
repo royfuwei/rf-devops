@@ -9,7 +9,9 @@ metadata:
   annotations:
     "meta.helm.sh/release-name": {{ .Release.Name | quote }}
     "meta.helm.sh/release-namespace": {{ .Release.Namespace | quote }}
+    {{- if .Values.ingress.tls.certManager.keepCertificate }}
     "helm.sh/resource-policy": keep
+    {{- end }}
 spec:
   secretName: {{ .Values.ingress.tls.secretName }}
   issuerRef:

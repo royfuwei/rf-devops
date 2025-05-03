@@ -144,6 +144,7 @@ ingress:
       enabled: true   # ✅ 改成底下是一個物件，這樣 template 可以用
       issuerType: issuer  # "issuer" or "cluster-issuer"
       issuerName: letsencrypt-dns
+      keepCertificate: true   # ⬅️ ✅ 新增這一行：控制是否啟用 "keep"
   annotations:
     spec.ingressClassName: nginx
     nginx.ingress.kubernetes.io/proxy-body-size: '0'
