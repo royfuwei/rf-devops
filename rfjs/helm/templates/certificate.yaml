@@ -1,3 +1,6 @@
+{{- if and .Values.ingress.enabled .Values.ingress.tls.enabled .Values.ingress.tls.certManager.enabled }}
+{{- $cert := lookup "cert-manager.io/v1" "Certificate" .Release.Namespace .Values.ingress.tls.secretName }}
+{{- if not $cert }}
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
@@ -18,3 +21,5 @@ spec:
     - {{ .host | quote }}
     {{- end }}
   renewBefore: 240h
+{{- end }}
+{{- end }}
