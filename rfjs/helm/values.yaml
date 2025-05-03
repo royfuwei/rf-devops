@@ -155,25 +155,25 @@ ingress:
     nginx.ingress.kubernetes.io/force-ssl-redirect: "false"   # ✅ 新增這行
     cert-manager.io/cluster-issuer: letsencrypt-dns # 關閉自建 certificate 改用 cert-manager
   hosts:
-    - host: rfjs.test.royfuwei.dev
+    # - host: rfjs.test.royfuwei.dev
+    #   paths:
+    #     - path: /
+    #       pathType: Prefix
+    #       serviceName: rfjs-api
+    #       servicePort: 8001
+    - host: rfjs-api.royfuwei.dev
       paths:
         - path: /
           pathType: Prefix
           serviceName: rfjs-api
           servicePort: 8001
-    - host: rfjs.api.royfuwei.dev
-      paths:
-        - path: /
-          pathType: Prefix
-          serviceName: rfjs-api
-          servicePort: 8001
-    - host: rfjs.gql.royfuwei.dev
+    - host: rfjs-gql.royfuwei.dev
       paths:
         - path: /
           pathType: Prefix
           serviceName: rfjs-gql
           servicePort: 8002
-    - host: rfjs.web.royfuwei.dev
+    - host: rfjs-web.royfuwei.dev
       paths:
         - path: /
           pathType: Prefix
