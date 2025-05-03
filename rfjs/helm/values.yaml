@@ -141,7 +141,7 @@ ingress:
     enabled: true
     secretName: rfjs-tls-secret  # 使用的 TLS 憑證
     certManager:
-      enabled: true   # ✅ 改成底下是一個物件，這樣 template 可以用
+      enabled: false   # ✅ 改成底下是一個物件，這樣 template 可以用
       issuerType: issuer  # "issuer" or "cluster-issuer"
       issuerName: letsencrypt-dns
       keepCertificate: true   # ⬅️ ✅ 新增這一行：控制是否啟用 "keep"
@@ -153,6 +153,7 @@ ingress:
     nginx.ingress.kubernetes.io/use-regex: 'true'
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "false"   # ✅ 新增這行
+    cert-manager.io/cluster-issuer: letsencrypt-dns # 關閉自建 certificate 改用 cert-manager
   hosts:
     - host: rfjs.test.royfuwei.dev
       paths:
