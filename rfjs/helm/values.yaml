@@ -161,6 +161,12 @@ ingress:
           pathType: Prefix
           serviceName: rfjs-api
           servicePort: 8001
+    - host: rfjs.test2.royfuwei.dev
+      paths:
+        - path: /
+          pathType: Prefix
+          serviceName: rfjs-api
+          servicePort: 8001
     - host: rfjs.gql.royfuwei.dev
       paths:
         - path: /
