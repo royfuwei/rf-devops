@@ -1,71 +1,39 @@
 #!/bin/bash
 
-# env-secret
-ENV_SECRET_NAME="env-secret"
-SECRET_NAME="harbor-registry-secret"
+# 預設 namespace
+NAMESPACE="${NAMESPACE:-weavcraft}"
+echo "Using namespace: $NAMESPACE"
 
-# secret
-kubectl create secret docker-registry $SECRET_NAME \
-  --docker-server=$HARBOR_HOST \
-  --docker-username=$HARBOR_USERNAME \
-  --docker-password=$HARBOR_TOKEN \
-  --docker-email=$HARBOR_EMAIL
-
-# check
-if [ $? -ne 0 ]; then
-  # failed has "already exists"
-  if kubectl get secret $SECRET_NAME >/dev/null 2>&1; then
-    echo "Secret '$SECRET_NAME' already exists. Deleting and recreating..."
-    # delete secret
-    kubectl delete secret $SECRET_NAME
-    # retry create secret
-    kubectl create secret docker-registry $SECRET_NAME \
-      --docker-server=$HARBOR_HOST \
-      --docker-username=$HARBOR_USERNAME \
-      --docker-password=$HARBOR_TOKEN \
-      --docker-email=$HARBOR_EMAIL
-    if [ $? -eq 0 ]; then
-      echo "Secret '$SECRET_NAME' recreated successfully."
+# 通用函式：create 或 recreate secret
+create_or_replace_secret() {
+  local type=$1
+  local name=$2
+  shift 2
+  echo "🔸 Creating secret '$name' ($type)..."
+  if ! kubectl create secret "$type" "$name" -n "$NAMESPACE" "$@"; then
+    if kubectl get secret "$name" -n "$NAMESPACE" >/dev/null 2>&1; then
+      echo "Secret '$name' already exists. Replacing..."
+      kubectl delete secret "$name" -n "$NAMESPACE"
+      kubectl create secret "$type" "$name" -n "$NAMESPACE" "$@" && echo "✅ Secret '$name' recreated."
     else
-      echo "Failed to recreate secret '$SECRET_NAME'."
+      echo "❌ Failed to create secret '$name' (not exists but creation failed)"
     fi
   else
-    echo "Failed to create secret '$SECRET_NAME'."
+    echo "✅ Secret '$name' created."
   fi
-else
-  echo "Secret '$SECRET_NAME' created successfully."
-fi
+}
 
-kubectl create secret generic $ENV_SECRET_NAME \
+# Harbor docker-registry secret
+create_or_replace_secret docker-registry "harbor-registry-secret" \
+  --docker-server="$HARBOR_HOST" \
+  --docker-username="$HARBOR_USERNAME" \
+  --docker-password="$HARBOR_TOKEN" \
+  --docker-email="$HARBOR_EMAIL"
+
+# 環境變數 secret
+create_or_replace_secret generic "env-secret" \
   --from-literal=DB_MONGO_URI=$ENV_DB_MONGO_URI \
   --from-literal=PUBLIC_SUPABASE_URL=$ENV_PUBLIC_SUPABASE_URL \
   --from-literal=PUBLIC_SUPABASE_ANON_KEY=$ENV_PUBLIC_SUPABASE_ANON_KEY \
   --from-literal=JWT_SECRET=$ENV_JWT_SECRET \
   --from-literal=JWT_EXPIRES_IN=$ENV_JWT_EXPIRES_IN
-
-
-# check
-if [ $? -ne 0 ]; then
-  # failed has "already exists"
-  if kubectl get secret $ENV_SECRET_NAME >/dev/null 2>&1; then
-    echo "Secret '$ENV_SECRET_NAME' already exists. Deleting and recreating..."
-    # delete secret
-    kubectl delete secret $ENV_SECRET_NAME
-    # retry create secret
-    kubectl create secret generic $ENV_SECRET_NAME \
-      --from-literal=DB_MONGO_URI=$ENV_DB_MONGO_URI \
-      --from-literal=PUBLIC_SUPABASE_URL=$ENV_PUBLIC_SUPABASE_URL \
-      --from-literal=PUBLIC_SUPABASE_ANON_KEY=$ENV_PUBLIC_SUPABASE_ANON_KEY \
-      --from-literal=JWT_SECRET=$ENV_JWT_SECRET \
-      --from-literal=JWT_EXPIRES_IN=$ENV_JWT_EXPIRES_IN
-    if [ $? -eq 0 ]; then
-      echo "Secret '$ENV_SECRET_NAME' recreated successfully."
-    else
-      echo "Failed to recreate secret '$ENV_SECRET_NAME'."
-    fi
-  else
-    echo "Failed to create secret '$ENV_SECRET_NAME'."
-  fi
-else
-  echo "Secret '$ENV_SECRET_NAME' created successfully."
-fi
