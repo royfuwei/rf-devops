@@ -46,7 +46,7 @@ jobs:
           registry: ${{ secrets.HARBOR_HOST }}
           username: ${{ secrets.HARBOR_USERNAME }}
           password: ${{ secrets.HARBOR_TOKEN }}
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           token: ${{ secrets.envPAT }}
