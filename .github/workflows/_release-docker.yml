@@ -1,5 +1,8 @@
 name: Deploy Local RFJS API
 
+permissions:
+  contents: read
+
 on:
   workflow_call:
     inputs:
