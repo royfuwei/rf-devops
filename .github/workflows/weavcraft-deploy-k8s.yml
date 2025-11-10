@@ -88,6 +88,7 @@ jobs:
           HARBOR_USERNAME: ${{ secrets.HARBOR_USERNAME }}
           HARBOR_TOKEN: ${{ secrets.HARBOR_TOKEN }}
           HARBOR_EMAIL: royfuwei@gmail.com
+          NAMESPACE: weavcraft
           ENV_DB_MONGO_URI: ${{ secrets.ENV_DB_MONGO_URI }}
           ENV_PUBLIC_SUPABASE_URL: ${{ secrets.ENV_PUBLIC_SUPABASE_URL }}
           ENV_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.ENV_PUBLIC_SUPABASE_ANON_KEY }}
