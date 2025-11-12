@@ -18,7 +18,7 @@ deployments:
       # Overrides the image tag whose default is the chart appVersion.
       tag: "latest"
     service:
-      type: NodePort
+      type: ClusterIP
       port: 8001
       externalPort: 31101
     env:

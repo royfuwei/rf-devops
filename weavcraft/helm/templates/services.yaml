@@ -14,7 +14,9 @@ spec:
       targetPort: http
       protocol: TCP
       name: http
+       {{ if eq .service.type "NodePort" }}
       nodePort: {{ .service.externalPort }}
+      {{ end }}
   selector:
     app.kubernetes.io/name: {{ .name }}
     {{- include "proj.selectorLabels" $ | nindent 4 }}
