@@ -14,7 +14,7 @@ on:
         default: k8s-royfuwei
       namespace:
         type: string
-        default: rfjs
+        default: rfjs-nx
     secrets:
       GIT_TOKEN:
         required: true
@@ -46,10 +46,10 @@ on:
 
 jobs:
   docker-build-api:
-    name: Docker release - rfjs-api:${{ inputs.appVersion }}
+    name: Docker release - rfjs-nx-api:${{ inputs.appVersion }}
     uses: ./.github/workflows/_release-docker.yml
     with:
-      projectName: rfjs-api
+      projectName: rfjs-nx-api
       projectSource: royfuwei
       version: ${{ inputs.appVersion }}
       buildPath: apps/api/Dockerfile
@@ -61,10 +61,10 @@ jobs:
       envPAT: ${{ secrets.GIT_TOKEN }}
 
   docker-build-gql:
-    name: Docker release - rfjs-gql:${{ inputs.appVersion }}
+    name: Docker release - rfjs-nx-gql:${{ inputs.appVersion }}
     uses: ./.github/workflows/_release-docker.yml
     with:
-      projectName: rfjs-gql
+      projectName: rfjs-nx-gql
       projectSource: royfuwei
       version: ${{ inputs.appVersion }}
       buildPath: apps/gql/Dockerfile
@@ -76,10 +76,10 @@ jobs:
       envPAT: ${{ secrets.GIT_TOKEN }}
       
   docker-build-web:
-    name: Docker release - rfjs-web:${{ inputs.appVersion }}
+    name: Docker release - rfjs-nx-web:${{ inputs.appVersion }}
     uses: ./.github/workflows/_release-docker.yml
     with:
-      projectName: rfjs-web
+      projectName: rfjs-nx-web
       projectSource: royfuwei
       version: ${{ inputs.appVersion }}
       buildPath: apps/web/Dockerfile
@@ -92,10 +92,10 @@ jobs:
 
   helm-release:
     needs: [docker-build-api, docker-build-gql, docker-build-web]
-    name: Helm release - rfjs:${{ inputs.helmVersion }}
+    name: Helm release - rfjs-nx:${{ inputs.helmVersion }}
     uses: ./.github/workflows/_release-helm.yml
     with:
-      projectName: rfjs
+      projectName: rfjs-nx
       projectSource: royfuwei
       appVersion: ${{ inputs.appVersion }}
       helmVersion: ${{ inputs.helmVersion }}
@@ -106,9 +106,9 @@ jobs:
       HARBOR_TOKEN: ${{ secrets.HARBOR_TOKEN }}
       envPAT: ${{ secrets.GIT_TOKEN }}
 
-  deploy-rfjs:
+  deploy-rfjs-nx:
     needs: helm-release
-    name: Deploy rfjs helm:${{ inputs.helmVersion }}
+    name: Deploy rfjs-nx helm:${{ inputs.helmVersion }}
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
     steps:
@@ -122,7 +122,7 @@ jobs:
       - name: Deploy to Local k8s
         uses: WyriHaximus/github-action-helm3@v3
         env:
-          PROJECT_NAME: rfjs
+          PROJECT_NAME: rfjs-nx
           PROJECT_SOURCE: royfuwei
           KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG }}
           HARBOR_HOST: ${{ secrets.HARBOR_HOST }}
@@ -143,5 +143,5 @@ jobs:
           overrule_existing_kubeconfig: "true"
           exec: |
             chmod 600 $HOME/.kube/config
-            ./rfjs/deploy-secret.sh
+            ./rfjs-nx/deploy-secret.sh
             ./.scripts/helm-install-latest.sh

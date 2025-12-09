@@ -3,7 +3,7 @@
 # Declare variables to be passed into your templates.
 
 deployments:
-  - name: rfjs-api
+  - name: rfjs-nx-api
     replicaCount: 1
     autoscaling:
       enabled: false
@@ -12,7 +12,7 @@ deployments:
       targetCPUUtilizationPercentage: 80
       # targetMemoryUtilizationPercentage: 80
     image:
-      repository: harbor.royfuwei.dev/royfuwei/rfjs-api
+      repository: harbor.royfuwei.dev/royfuwei/rfjs-nx-api
       pullPolicy: Always
       # pullPolicy: IfNotPresent
       # Overrides the image tag whose default is the chart appVersion.
@@ -57,7 +57,7 @@ deployments:
       # requests:
       #   cpu: 100m
       #   memory: 128Mi
-  - name: rfjs-gql
+  - name: rfjs-nx-gql
     replicaCount: 1
     autoscaling:
       enabled: false
@@ -66,7 +66,7 @@ deployments:
       targetCPUUtilizationPercentage: 80
       # targetMemoryUtilizationPercentage: 80
     image:
-      repository: harbor.royfuwei.dev/royfuwei/rfjs-gql
+      repository: harbor.royfuwei.dev/royfuwei/rfjs-nx-gql
       pullPolicy: Always
       # pullPolicy: IfNotPresent
       # Overrides the image tag whose default is the chart appVersion.
@@ -111,7 +111,7 @@ deployments:
       # requests:
       #   cpu: 100m
       #   memory: 128Mi
-  - name: rfjs-web
+  - name: rfjs-nx-web
     replicaCount: 1
     autoscaling:
       enabled: false
@@ -120,7 +120,7 @@ deployments:
       targetCPUUtilizationPercentage: 80
       # targetMemoryUtilizationPercentage: 80
     image:
-      repository: harbor.royfuwei.dev/royfuwei/rfjs-web
+      repository: harbor.royfuwei.dev/royfuwei/rfjs-nx-web
       pullPolicy: Always
       tag: "latest"
     service:
@@ -139,7 +139,7 @@ ingress:
   enabled: true
   tls:
     enabled: true
-    secretName: rfjs-tls-secret  # 使用的 TLS 憑證
+    secretName: rfjs-nx-tls-secret  # 使用的 TLS 憑證
     certManager:
       enabled: true   # ✅ 改成底下是一個物件，這樣 template 可以用
       issuerType: cluster-issuer  # "issuer" or "cluster-issuer"
@@ -155,29 +155,29 @@ ingress:
     nginx.ingress.kubernetes.io/force-ssl-redirect: "false"   # ✅ 新增這行
     cert-manager.io/cluster-issuer: letsencrypt-dns # 關閉自建 certificate 改用 cert-manager
   hosts:
-    - host: rfjs.api.royfuwei.dev
+    - host: rfjs-nx.api.royfuwei.dev
       paths:
         - path: /
           pathType: Prefix
-          serviceName: rfjs-api
+          serviceName: rfjs-nx-api
           servicePort: 8001
-    - host: rfjs.test2.royfuwei.dev
+    - host: rfjs-nx.test2.royfuwei.dev
       paths:
         - path: /
           pathType: Prefix
-          serviceName: rfjs-api
+          serviceName: rfjs-nx-api
           servicePort: 8001
-    - host: rfjs.gql.royfuwei.dev
+    - host: rfjs-nx.gql.royfuwei.dev
       paths:
         - path: /
           pathType: Prefix
-          serviceName: rfjs-gql
+          serviceName: rfjs-nx-gql
           servicePort: 8002
-    - host: rfjs.web.royfuwei.dev
+    - host: rfjs-nx.web.royfuwei.dev
       paths:
         - path: /
           pathType: Prefix
-          serviceName: rfjs-web
+          serviceName: rfjs-nx-web
           servicePort: 3000
           
 imagePullSecrets: []
