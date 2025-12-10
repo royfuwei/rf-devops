@@ -81,6 +81,7 @@ jobs:
         run: |
           git config --global user.email royfuwei@gmail.com
           git config --global user.name royfuwei
+          git checkout production
           git pull
           npm ci
 
