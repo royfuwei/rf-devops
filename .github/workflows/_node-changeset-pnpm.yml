@@ -26,6 +26,7 @@ jobs:
         with:
           fetch-depth: 0
           token: ${{ secrets.GIT_TOKEN }}
+          ref: production
       
       - uses: pnpm/action-setup@v4
         name: Install pnpm
@@ -56,13 +57,25 @@ jobs:
           set +e
           npx changeset version
           EXIT_CODE=$?
-          echo "exit_code=$EXIT_CODE" >> $GITHUB_OUTPUT
-          if [ $EXIT_CODE -eq 0 ]; then
+
+          echo "exit_code=$EXIT_CODE" >> "$GITHUB_OUTPUT"
+
+          if [ "$EXIT_CODE" = "0" ]; then
             echo "changeset version succeeded"
           else
             echo "changeset version failed with code $EXIT_CODE"
+            echo "--- changeset error context ---"
+            git status
+            ls -al
           fi
+
           exit 0
+
+      - name: Commit version bump
+        if: steps.changeset_version.outputs.exit_code == '0'
+        run: |
+          git add -A
+          git commit -m "chore: version bump" || echo "No changes to commit"
 
       - name: Get Package Version
         id: version
@@ -76,4 +89,4 @@ jobs:
           VERSION=${{ steps.version.outputs.current-version }}
           echo "Release version: $VERSION"
           git tag "v$VERSION"
-          git push origin HEAD:production -f --follow-tags
+          git push origin production --follow-tags
