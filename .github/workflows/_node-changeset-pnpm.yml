@@ -1,0 +1,75 @@
+name: Release pnpm project
+
+on:
+  workflow_call:
+    secrets:
+      GIT_TOKEN:
+        required: true
+    outputs:
+      release-version:
+        value: ${{ jobs.release.outputs.release-version }}
+
+jobs:
+  release:
+    # This job is used to release the package using changesets
+    name: Run release
+    runs-on: ubuntu-latest
+    outputs:
+      release-version: ${{ steps.version.outputs.current-version }}
+    strategy:
+      matrix:
+        node-version: [20.x]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GIT_TOKEN }}
+      
+      - uses: pnpm/action-setup@v4
+        name: Install pnpm
+        with:
+          run_install: false
+
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'pnpm'
+          
+      - name: Install dependencies
+        run: |
+          export CI=true
+          git config --global user.email "royfuwei@gmail.com"
+          git config --global user.name "royfuwei"
+          pnpm -v
+          pnpm install --frozen-lockfile
+      
+      # 用 changesets 計算版本 + 更新 package.json + CHANGELOG
+      # 如果沒有任何 .changeset 檔，它會失敗，因此這裡把 exit code 攔住
+      - name: Run changeset version
+        id: changeset_version
+        run: |
+          set +e
+          npx @changesets/cli version
+          EXIT_CODE=$?
+          echo "exit_code=$EXIT_CODE" >> $GITHUB_OUTPUT
+          if [ $EXIT_CODE -ne 0 ]; then
+            echo "No unreleased changesets found, skip versioning & tagging."
+          fi
+          exit 0
+
+      - name: Get Package Version
+        id: version
+        if: steps.changeset_version.outputs.exit_code == '0'
+        uses: martinbeentjes/npm-get-version-action@v1.3.1
+
+      # 改成用 version 建 tag，然後 push branch + tags
+      - name: Create and push tag
+        if: steps.changeset_version.outputs.exit_code == '0'
+        run: |
+          VERSION=${{ steps.version.outputs.current-version }}
+          echo "Release version: $VERSION"
+          git tag "v$VERSION"
+          git push origin HEAD:production -f --follow-tags
