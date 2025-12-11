@@ -89,4 +89,5 @@ jobs:
           VERSION=${{ steps.version.outputs.current-version }}
           echo "Release version: $VERSION"
           git tag "v$VERSION"
-          git push origin production --follow-tags
+          git push origin production
+          git push origin "v$VERSION"
