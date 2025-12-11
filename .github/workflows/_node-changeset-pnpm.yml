@@ -70,17 +70,17 @@ jobs:
           fi
 
           exit 0
-
-      - name: Commit version bump
-        if: steps.changeset_version.outputs.exit_code == '0'
-        run: |
-          git add -A
-          git commit -m "chore: version bump" || echo "No changes to commit"
-
       - name: Get Package Version
         id: version
         if: steps.changeset_version.outputs.exit_code == '0'
         uses: martinbeentjes/npm-get-version-action@v1.3.1
+
+      - name: Commit version bump
+        if: steps.changeset_version.outputs.exit_code == '0'
+        run: |
+          VERSION=${{ steps.version.outputs.current-version }}
+          git add -A
+          git commit -m "chore(release): $VERSION" || echo "No changes to commit"
 
       # 改成用 version 建 tag，然後 push branch + tags
       - name: Create and push tag
