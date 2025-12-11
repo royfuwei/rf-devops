@@ -50,13 +50,17 @@ jobs:
       # 如果沒有任何 .changeset 檔，它會失敗，因此這裡把 exit code 攔住
       - name: Run changeset version
         id: changeset_version
+        env:
+          GITHUB_TOKEN: ${{ secrets.GIT_TOKEN }}
         run: |
           set +e
-          npx @changesets/cli version
+          npx changeset version
           EXIT_CODE=$?
           echo "exit_code=$EXIT_CODE" >> $GITHUB_OUTPUT
-          if [ $EXIT_CODE -ne 0 ]; then
-            echo "No unreleased changesets found, skip versioning & tagging."
+          if [ $EXIT_CODE -eq 0 ]; then
+            echo "changeset version succeeded"
+          else
+            echo "changeset version failed with code $EXIT_CODE"
           fi
           exit 0
 
