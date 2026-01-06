@@ -1,0 +1,117 @@
+name: Release (changesets publish)
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        type: string
+        required: false
+        default: npm_release
+      node_version:
+        type: string
+        required: false
+        default: 20.x
+      build_task:
+        type: string
+        required: false
+        default: build
+      run_tests:
+        type: boolean
+        required: false
+        default: false
+    secrets:
+      GIT_TOKEN:
+        required: true
+      NPM_TOKEN:
+        required: true
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GIT_TOKEN }}
+          ref: ${{ inputs.ref }}
+
+      - name: Git identity
+        run: |
+          git config --global user.email "royfuwei@gmail.com"
+          git config --global user.name "royfuwei"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node_version }}
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      - name: Install dependencies
+        run: |
+          pnpm -v
+          pnpm install --frozen-lockfile
+
+      # 沒 changeset 時，changeset version 會失敗；我們用 status 先判斷是否有 releases
+      - name: Compute release plan
+        id: plan
+        run: |
+          npx changeset status --output changeset-status.json
+          node - <<'NODE'
+          const fs = require('fs');
+          const s = JSON.parse(fs.readFileSync('changeset-status.json','utf8'));
+          const releases = Array.isArray(s.releases) ? s.releases : [];
+          const has = releases.length > 0;
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `has_releases=${has}\n`);
+          console.log('Releases:', releases.map(r => r.name));
+          NODE
+
+      - name: Apply versions (changeset version)
+        if: steps.plan.outputs.has_releases == 'true'
+        run: |
+          npx changeset version
+
+      - name: Commit & push version bump
+        if: steps.plan.outputs.has_releases == 'true'
+        run: |
+          git add -A
+          git commit -m "chore(release): version packages" || echo "No changes"
+          git push origin "${{ inputs.ref }}"
+
+      # 可選：測試
+      - name: Test
+        if: steps.plan.outputs.has_releases == 'true' && inputs.run_tests
+        run: |
+          pnpm -r test --if-present
+
+      # Turbo build：可只 build 要 publish 的 packages（用 filters）
+      - name: Build (turbo only released packages)
+        if: steps.plan.outputs.has_releases == 'true'
+        run: |
+          node - <<'NODE'
+          const fs = require('fs');
+          const { execSync } = require('child_process');
+          const s = JSON.parse(fs.readFileSync('changeset-status.json','utf8'));
+          const releases = Array.isArray(s.releases) ? s.releases : [];
+          const filters = releases.map(r => `--filter=${r.name}`).join(' ');
+          const cmd = `pnpm turbo run ${{ inputs.build_task }} ${filters}`;
+          console.log(cmd);
+          execSync(cmd, { stdio: 'inherit' });
+          NODE
+
+      - name: Publish to npm (changesets)
+        if: steps.plan.outputs.has_releases == 'true'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          npx changeset publish
