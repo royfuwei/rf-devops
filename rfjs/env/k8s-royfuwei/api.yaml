@@ -1,0 +1,48 @@
+fullnameOverride: api
+
+service:
+  port: 3000
+containerPort: 3000
+
+env:
+  APP_NAME: "rfjs/app"
+  PORT: "3000"
+
+secretEnv: {}
+
+secrets:
+  existingSecretName: api-env
+  useEnvFrom: true
+
+ingress:
+  enabled: true
+  className: nginx   # 如果你是 traefik 就改 traefik
+  annotations:
+    # nginx 範例（你可留空、或依你環境調）
+    nginx.ingress.kubernetes.io/proxy-body-size: "20m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+  hosts:
+    - host: api.royfuwei.dev
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: api-tls
+      hosts:
+        - api.royfuwei.dev
+
+# Traefik + cert-manager
+# ingress:
+#   enabled: true
+#   className: traefik
+#   annotations:
+#     cert-manager.io/cluster-issuer: "letsencrypt-prod"
+#   hosts:
+#     - host: api.royfuwei.dev
+#       paths:
+#         - path: /
+#   tls:
+#     - secretName: api-tls
+#       hosts:
+#         - api.royfuwei.dev
+

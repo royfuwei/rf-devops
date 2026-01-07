@@ -1,0 +1,26 @@
+fullnameOverride: ""
+
+image:
+  repository: ""
+  tag: ""
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+
+service:
+  type: ClusterIP
+  port: 3000
+
+containerPort: 3000
+
+secrets:
+  existingSecretName: ""  # e.g. api-env
+  useEnvFrom: true        # 以 envFrom 引用整包 secret
+
+env: {}
+secretEnv: {}
+
+resources: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}
