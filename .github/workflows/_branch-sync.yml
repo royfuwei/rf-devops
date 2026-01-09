@@ -1,0 +1,34 @@
+name: Branch sync
+
+on:
+  workflow_call:
+    inputs:
+      source_ref:
+        type: string
+        required: true
+      target_ref:
+        type: string
+        required: true
+    secrets:
+      GIT_TOKEN:
+        required: true
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GIT_TOKEN }}
+          ref: ${{ inputs.target_ref }}
+
+      - name: Sync branch
+        shell: bash
+        run: |
+          git fetch origin ${{ inputs.source_ref }}:${{ inputs.source_ref }}
+          git checkout ${{ inputs.target_ref }}
+          git merge --no-edit ${{ inputs.source_ref }} || true
+          git push origin ${{ inputs.target_ref }}

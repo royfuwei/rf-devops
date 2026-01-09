@@ -1,0 +1,124 @@
+name: Changesets Publish (publish only)
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        type: string
+        required: true
+      channel:
+        type: string
+        required: false
+        default: stable   # stable | alpha | beta | rc
+      node_version:
+        type: string
+        required: false
+        default: 20.x
+      build_task:
+        type: string
+        required: false
+        default: build
+      run_tests:
+        type: boolean
+        required: false
+        default: false
+    secrets:
+      GIT_TOKEN:
+        required: true
+      NPM_TOKEN:
+        required: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GIT_TOKEN }}
+          ref: ${{ inputs.ref }}
+
+      - name: Git identity
+        run: |
+          git config --global user.email "royfuwei@gmail.com"
+          git config --global user.name "royfuwei"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node_version }}
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate channel allowlist
+        shell: bash
+        run: |
+          set -euo pipefail
+          CHANNEL="${{ inputs.channel }}"
+          case "$CHANNEL" in
+            stable|alpha|beta|rc)
+              echo "Allowed channel: $CHANNEL"
+              ;;
+            *)
+              echo "❌ Unsupported channel: $CHANNEL"
+              echo "Allowed channels: stable, alpha, beta, rc"
+              exit 1
+              ;;
+          esac
+
+      - name: Test
+        if: inputs.run_tests
+        run: pnpm -r test --if-present
+
+      - name: Build
+        run: pnpm turbo run ${{ inputs.build_task }}
+
+      - name: Publish to npm (changesets)
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          CHANNEL="${{ inputs.channel }}"
+          if [ "$CHANNEL" = "stable" ]; then
+            npx changeset publish
+          else
+            npx changeset publish --tag "$CHANNEL"
+          fi
+
+      - name: Tag workspace package versions
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --tags origin
+
+          pnpm -r --silent exec node -e "
+            const fs = require('fs');
+            const p = JSON.parse(fs.readFileSync('package.json','utf8'));
+            if (p.name && p.version) console.log(p.name + ' ' + p.version);
+          " | while read -r name version; do
+            safe=$(echo "$name" | sed 's/^@//' | sed 's#/#__#g')
+            tag="pkg/${safe}/v${version}"
+            if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
+              echo "skip existing tag: ${tag}"
+              continue
+            fi
+            echo "create tag: ${tag}"
+            git tag "${tag}"
+          done
+
+          git push origin --tags

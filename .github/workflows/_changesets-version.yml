@@ -1,0 +1,87 @@
+name: Changesets Version (bump only)
+
+on:
+  workflow_call:
+    inputs:
+      source_ref:
+        type: string
+        required: true
+      target_ref:
+        type: string
+        required: true
+      node_version:
+        type: string
+        required: false
+        default: 20.x
+    secrets:
+      GIT_TOKEN:
+        required: true
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GIT_TOKEN }}
+          ref: ${{ inputs.target_ref }}
+
+      - name: Git identity
+        run: |
+          git config --global user.email "royfuwei@gmail.com"
+          git config --global user.name "royfuwei"
+
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node_version }}
+          cache: pnpm
+
+      - name: Sync source into target
+        shell: bash
+        run: |
+          git fetch origin ${{ inputs.source_ref }}:${{ inputs.source_ref }}
+          git checkout ${{ inputs.target_ref }}
+          git merge --no-edit ${{ inputs.source_ref }}
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Ensure changesets baseBranch exists
+        shell: bash
+        run: |
+          BASE=$(node -p "require('./.changeset/config.json').baseBranch || 'main'")
+          git fetch origin "$BASE":refs/remotes/origin/"$BASE"
+          git branch -f "$BASE" origin/"$BASE"
+
+      - name: Compute release plan
+        id: plan
+        shell: bash
+        run: |
+          npx changeset status --output changeset-status.json
+          node - <<'NODE'
+          const fs = require('fs');
+          const s = JSON.parse(fs.readFileSync('changeset-status.json','utf8'));
+          const releases = Array.isArray(s.releases) ? s.releases : [];
+          const has = releases.length > 0;
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `has_releases=${has}\n`);
+          console.log('Releases:', releases.map(r => r.name));
+          NODE
+
+      - name: Apply versions
+        if: steps.plan.outputs.has_releases == 'true'
+        run: npx changeset version
+
+      - name: Commit & push version bump
+        if: steps.plan.outputs.has_releases == 'true'
+        shell: bash
+        run: |
+          git add -A
+          git commit -m "chore(release): version packages" || echo "No changes"
+          git push origin ${{ inputs.target_ref }}

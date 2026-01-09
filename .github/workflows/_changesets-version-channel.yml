@@ -1,0 +1,158 @@
+name: Changesets Version (by channel)
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        type: string
+        required: true
+      channel:
+        type: string
+        required: true   # stable | alpha | beta | rc
+      node_version:
+        type: string
+        required: false
+        default: 20.x
+    secrets:
+      GIT_TOKEN:
+        required: true
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GIT_TOKEN }}
+          ref: ${{ inputs.ref }}
+
+      - name: Git identity
+        run: |
+          git config --global user.email "royfuwei@gmail.com"
+          git config --global user.name "royfuwei"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node_version }}
+          cache: pnpm
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Ensure changesets baseBranch exists
+        shell: bash
+        run: |
+          BASE=$(node -p "require('./.changeset/config.json').baseBranch || 'main'")
+          echo "Changesets baseBranch: $BASE"
+          git fetch origin "$BASE":refs/remotes/origin/"$BASE"
+          git branch -f "$BASE" origin/"$BASE"
+          git show -s --oneline "$BASE"
+
+      - name: Validate channel allowlist
+        shell: bash
+        run: |
+          set -euo pipefail
+          CHANNEL="${{ inputs.channel }}"
+          case "$CHANNEL" in
+            stable|alpha|beta|rc)
+              echo "Allowed channel: $CHANNEL"
+              ;;
+            *)
+              echo "❌ Unsupported channel: $CHANNEL"
+              echo "Allowed channels: stable, alpha, beta, rc"
+              exit 1
+              ;;
+          esac
+
+      - name: Enter/Exit pre mode (multi-channel)
+        shell: bash
+        run: |
+          set -euo pipefail
+          CHANNEL="${{ inputs.channel }}"
+
+          current_pre_tag() {
+            if [ ! -f ".changeset/pre.json" ]; then
+              echo ""
+              return 0
+            fi
+            node -p "(() => { try { return require('./.changeset/pre.json').tag || '' } catch(e) { return '' } })()"
+          }
+
+          if [ "$CHANNEL" = "stable" ]; then
+            if [ -f ".changeset/pre.json" ]; then
+              echo "Exiting pre mode..."
+              npx changeset pre exit
+            else
+              echo "Not in pre mode."
+            fi
+          else
+            if [ -f ".changeset/pre.json" ]; then
+              CUR="$(current_pre_tag)"
+              if [ -n "$CUR" ] && [ "$CUR" != "$CHANNEL" ]; then
+                echo "Switch pre mode: $CUR -> $CHANNEL"
+                npx changeset pre exit
+                npx changeset pre enter "$CHANNEL"
+              else
+                echo "Already in pre mode ($CHANNEL)."
+              fi
+            else
+              echo "Entering pre mode: $CHANNEL"
+              npx changeset pre enter "$CHANNEL"
+            fi
+          fi
+
+      - name: Compute release plan
+        id: plan
+        shell: bash
+        run: |
+          npx changeset status --output changeset-status.json
+          node - <<'NODE'
+          const fs = require('fs');
+          const s = JSON.parse(fs.readFileSync('changeset-status.json','utf8'));
+          const releases = Array.isArray(s.releases) ? s.releases : [];
+          const has = releases.length > 0;
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `has_releases=${has}\n`);
+          console.log('Releases:', releases.map(r => `${r.name}@${r.newVersion}`));
+          NODE
+
+      - name: Apply versions
+        if: steps.plan.outputs.has_releases == 'true'
+        run: npx changeset version
+
+      - name: Commit & push
+        if: steps.plan.outputs.has_releases == 'true'
+        shell: bash
+        run: |
+          git add -A
+          git commit -m "chore(release): version packages" || echo "No changes"
+          git push origin "${{ inputs.ref }}"
+
+      - name: Open PR back to main
+        if: steps.plan.outputs.has_releases == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GIT_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          FROM="${{ inputs.ref }}"
+          TO="main"
+          TITLE="chore(release): sync ${FROM} back to ${TO}"
+          BODY="Automated PR to keep main updated with version bumps, changelog, and consumed changesets."
+
+          if gh pr list --base "$TO" --head "$FROM" --state open --json number -q 'length' | grep -q '^0$'; then
+            gh pr create --base "$TO" --head "$FROM" --title "$TITLE" --body "$BODY"
+          else
+            echo "PR already exists: ${FROM} -> ${TO}"
+          fi
