@@ -71,10 +71,9 @@ jobs:
     needs: detect
     if: needs.detect.outputs.has_apps == 'true'
     strategy:
-      fail-fast: false # 讓不同 App 的 Build 互不影響
+      fail-fast: false
       matrix:
         app: ${{ fromJson(needs.detect.outputs.apps_matrix) }}
-    # 呼叫你剛才命名的 Reusable Turbo Docker Workflow
     uses: ./.github/workflows/_release-turbo-docker.yml
     with:
       projectName: rfjs-${{ matrix.app.id }}
@@ -82,7 +81,13 @@ jobs:
       version: ${{ matrix.app.version }}
       buildPath: ./${{ matrix.app.path }}/Dockerfile
       environment: ${{ inputs.environment }}
-    secrets: inherit
+    # ❌ 移除 secrets: inherit
+    # ✅ 改為明確傳遞，確保名稱與 _release-turbo-docker.yml 的 inputs 對齊
+    secrets:
+      HARBOR_HOST: ${{ secrets.HARBOR_HOST }}
+      HARBOR_USERNAME: ${{ secrets.HARBOR_USERNAME }}
+      HARBOR_TOKEN: ${{ secrets.HARBOR_TOKEN }}
+      envPAT: ${{ secrets.GIT_TOKEN }} # 這裡將 GIT_TOKEN 映射給子 workflow 的 envPAT
 
   # --- Job 3: 最終統一部署 (所有 Build 成功後執行一次) ---
   deploy-k8s:
