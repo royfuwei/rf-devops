@@ -119,28 +119,53 @@ jobs:
               ;;
           esac
 
-      # ✅ 用 changesets 的 release plan 當作「真實 affected」，再轉成 turbo filters
+      # ✅ 重點：確保 changesets 的 baseBranch 在 runner 上一定存在（解 diverged error）
+      - name: Ensure changesets baseBranch exists (hard)
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          BASE=$(node -p "require('./.changeset/config.json').baseBranch || 'main'")
+          echo "Changesets baseBranch: $BASE"
+
+          echo "== before fetch, refs containing BASE =="
+          git show-ref --heads --remotes | grep -E "refs/heads/$BASE$|refs/remotes/origin/$BASE$" || true
+
+          echo "== fetch origin/$BASE =="
+          # 用完整 refspec，避免 checkout 只抓單一 ref 的情況
+          git fetch --no-tags --prune origin "+refs/heads/${BASE}:refs/remotes/origin/${BASE}"
+
+          echo "== create/update local branch $BASE =="
+          git branch -f "$BASE" "refs/remotes/origin/${BASE}"
+
+          echo "== after fetch, verify =="
+          git show-ref --heads --remotes | grep -E "refs/heads/$BASE$|refs/remotes/origin/$BASE$" || (echo "❌ baseBranch '$BASE' not found on origin" && git branch -a && exit 1)
+
+          echo "== baseBranch head =="
+          git show -s --oneline "$BASE"
+
+      # ✅ 用 changesets 的 release plan 當作「真實 affected」→ 產生 turbo filters
       - name: Compute release plan (changesets) -> turbo filters
         id: plan
         shell: bash
         run: |
           set -euo pipefail
           npx changeset status --output changeset-status.json
-          node -e "const fs=require('fs'); const s=JSON.parse(fs.readFileSync('changeset-status.json','utf8')); const releases=Array.isArray(s.releases)?s.releases:[]; const has=releases.length>0; fs.appendFileSync(process.env.GITHUB_OUTPUT, 'has_releases='+has+'\\n'); const filters=releases.map(r=>'--filter='+r.name).join(' '); fs.appendFileSync(process.env.GITHUB_OUTPUT, 'turbo_filters='+filters+'\\n'); console.log('Releases:', releases.map(r=>r.name+'@'+r.newVersion)); console.log('Turbo filters:', filters || '(none)');"
+          node -e "const fs=require('fs'); const s=JSON.parse(fs.readFileSync('changeset-status.json','utf8')); const releases=Array.isArray(s.releases)?s.releases:[]; const has=releases.length>0; fs.appendFileSync(process.env.GITHUB_OUTPUT, 'has_releases='+has+'\\n'); const testFilters=releases.map(r=>'--filter='+r.name).join(' '); const buildFilters=releases.map(r=>'--filter='+r.name+'...').join(' '); fs.appendFileSync(process.env.GITHUB_OUTPUT, 'turbo_test_filters='+testFilters+'\\n'); fs.appendFileSync(process.env.GITHUB_OUTPUT, 'turbo_build_filters='+buildFilters+'\\n'); console.log('Releases:', releases.map(r=>r.name+'@'+r.newVersion)); console.log('Turbo test filters:', testFilters || '(none)'); console.log('Turbo build filters:', buildFilters || '(none)');"
 
       - name: Test (turbo only released packages)
         if: steps.plan.outputs.has_releases == 'true' && inputs.run_tests
         shell: bash
         run: |
           set -euo pipefail
-          pnpm turbo run test ${{ steps.plan.outputs.turbo_filters }} --continue
+          pnpm turbo run test ${{ steps.plan.outputs.turbo_test_filters }} --continue
 
-      - name: Build (turbo only released packages)
+      - name: Build (turbo released packages + deps)
         if: steps.plan.outputs.has_releases == 'true'
         shell: bash
         run: |
           set -euo pipefail
-          pnpm turbo run ${{ inputs.build_task }} ${{ steps.plan.outputs.turbo_filters }}
+          pnpm turbo run ${{ inputs.build_task }} ${{ steps.plan.outputs.turbo_build_filters }}
 
       - name: Publish to npm (changesets)
         if: steps.plan.outputs.has_releases == 'true'
@@ -156,7 +181,7 @@ jobs:
             npx changeset publish --tag "$CHANNEL"
           fi
 
-      # ✅ 只有真的 publish 成功才打 tags（避免空跑/誤打）
+      # ✅ 只有真的 publish 成功才打 tags
       - name: Tag workspace package versions
         if: steps.plan.outputs.has_releases == 'true' && success()
         shell: bash
