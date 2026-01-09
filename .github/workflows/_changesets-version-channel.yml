@@ -8,7 +8,7 @@ on:
         required: true
       channel:
         type: string
-        required: true   # stable | alpha | beta | rc
+        required: true
       node_version:
         type: string
         required: false
@@ -76,7 +76,6 @@ jobs:
         run: |
           set -euo pipefail
           BASE=$(node -p "require('./.changeset/config.json').baseBranch || 'main'")
-          echo "Changesets baseBranch: $BASE"
           git fetch origin "+refs/heads/${BASE}:refs/remotes/origin/${BASE}"
           git branch -f "$BASE" "refs/remotes/origin/${BASE}"
           
@@ -92,50 +91,56 @@ jobs:
         run: |
           set -euo pipefail
           CHANNEL="${{ inputs.channel }}"
-          
           if [ "$CHANNEL" = "stable" ]; then
             if [ -f ".changeset/pre.json" ]; then
-              echo "Exiting pre-release mode..."
               npx changeset pre exit
             fi
           else
             if [ -f ".changeset/pre.json" ]; then
               CUR=$(node -p "require('./.changeset/pre.json').tag")
               if [ "$CUR" != "$CHANNEL" ]; then
-                echo "Switching pre-release tag: $CUR -> $CHANNEL"
                 npx changeset pre exit
                 npx changeset pre enter "$CHANNEL"
-              else
-                echo "Already in pre-release mode ($CHANNEL)"
               fi
             else
-              echo "Entering pre-release mode: $CHANNEL"
               npx changeset pre enter "$CHANNEL"
             fi
           fi
 
-      # ✅ 強化版的偵測邏輯：結合 changeset status 與 git diff
       - name: Compute release plan
         id: plan
         shell: bash
         run: |
           set -euo pipefail
-          
-          # 1. 檢查是否有 .changeset/*.md 檔案 (Standard Changesets)
-          # 排除 README.md 和 .changeset 內的其他設定檔
           CHANGESET_FILES=$(ls .changeset/*.md 2>/dev/null | grep -v 'README.md' || echo "")
-          
-          # 2. 同時執行 status 作為備援檢查
           npx changeset status --output changeset-status.json
           HAS_RELEASES_BY_STATUS=$(node -p "JSON.parse(require('fs').readFileSync('changeset-status.json')).releases.length > 0" 2>/dev/null || echo "false")
           
           if [ -n "$CHANGESET_FILES" ] || [ "$HAS_RELEASES_BY_STATUS" = "true" ]; then
             echo "has_releases=true" >> "$GITHUB_OUTPUT"
-            echo "✅ Changes detected via status or changeset files."
+            # 產生 Turbo filters 用於後續編譯與測試
+            node -e "
+              const s=JSON.parse(require('fs').readFileSync('changeset-status.json','utf8'));
+              const releases=s.releases || [];
+              const buildFilters=releases.map(r=>'--filter='+r.name+'...').join(' ');
+              const testFilters=releases.map(r=>'--filter='+r.name).join(' ');
+              require('fs').appendFileSync(process.env.GITHUB_OUTPUT, 'turbo_build_filters='+buildFilters+'\n');
+              require('fs').appendFileSync(process.env.GITHUB_OUTPUT, 'turbo_test_filters='+testFilters+'\n');
+            "
           else
             echo "has_releases=false" >> "$GITHUB_OUTPUT"
-            echo "ℹ️ No pending changesets found."
           fi
+
+      # ✅ 關鍵修正：在版本化之前先 Build 依賴項
+      # 這能解決 test 階段找不到 @rfjs/orm-drizzle 的問題
+      - name: Build dependencies
+        if: steps.plan.outputs.has_releases == 'true'
+        run: pnpm turbo run build ${{ steps.plan.outputs.turbo_build_filters }}
+
+      # ✅ 如果你有在 Version 階段跑測試，確保在此時跑
+      # - name: Run tests
+      #   if: steps.plan.outputs.has_releases == 'true'
+      #   run: pnpm turbo run test ${{ steps.plan.outputs.turbo_test_filters }}
 
       - name: Apply versions
         if: steps.plan.outputs.has_releases == 'true'
@@ -147,7 +152,6 @@ jobs:
         run: |
           set -euo pipefail
           git add -A
-          # 只有在真的有變動時才 commit，避免 workflow 報錯
           if git diff --staged --quiet; then
             echo "No changes to commit."
           else
