@@ -71,7 +71,6 @@ jobs:
       - name: Install deps
         run: pnpm install --frozen-lockfile
 
-      # ✅ 更新此區塊以維持指令相容性
       - name: Ensure changesets baseBranch exists
         shell: bash
         run: |
@@ -80,6 +79,13 @@ jobs:
           echo "Changesets baseBranch: $BASE"
           git fetch origin "+refs/heads/${BASE}:refs/remotes/origin/${BASE}"
           git branch -f "$BASE" "refs/remotes/origin/${BASE}"
+          
+          if git rev-parse --verify "$BASE" >/dev/null 2>&1; then
+            echo "✅ Local branch '$BASE' is ready."
+          else
+            echo "❌ baseBranch '$BASE' not found"
+            exit 1
+          fi
 
       - name: Enter/Exit pre mode
         shell: bash
@@ -89,27 +95,47 @@ jobs:
           
           if [ "$CHANNEL" = "stable" ]; then
             if [ -f ".changeset/pre.json" ]; then
+              echo "Exiting pre-release mode..."
               npx changeset pre exit
             fi
           else
             if [ -f ".changeset/pre.json" ]; then
               CUR=$(node -p "require('./.changeset/pre.json').tag")
               if [ "$CUR" != "$CHANNEL" ]; then
+                echo "Switching pre-release tag: $CUR -> $CHANNEL"
                 npx changeset pre exit
                 npx changeset pre enter "$CHANNEL"
+              else
+                echo "Already in pre-release mode ($CHANNEL)"
               fi
             else
+              echo "Entering pre-release mode: $CHANNEL"
               npx changeset pre enter "$CHANNEL"
             fi
           fi
 
+      # ✅ 強化版的偵測邏輯：結合 changeset status 與 git diff
       - name: Compute release plan
         id: plan
         shell: bash
         run: |
+          set -euo pipefail
+          
+          # 1. 檢查是否有 .changeset/*.md 檔案 (Standard Changesets)
+          # 排除 README.md 和 .changeset 內的其他設定檔
+          CHANGESET_FILES=$(ls .changeset/*.md 2>/dev/null | grep -v 'README.md' || echo "")
+          
+          # 2. 同時執行 status 作為備援檢查
           npx changeset status --output changeset-status.json
-          HAS=$(node -p "JSON.parse(require('fs').readFileSync('changeset-status.json')).releases.length > 0")
-          echo "has_releases=$HAS" >> "$GITHUB_OUTPUT"
+          HAS_RELEASES_BY_STATUS=$(node -p "JSON.parse(require('fs').readFileSync('changeset-status.json')).releases.length > 0" 2>/dev/null || echo "false")
+          
+          if [ -n "$CHANGESET_FILES" ] || [ "$HAS_RELEASES_BY_STATUS" = "true" ]; then
+            echo "has_releases=true" >> "$GITHUB_OUTPUT"
+            echo "✅ Changes detected via status or changeset files."
+          else
+            echo "has_releases=false" >> "$GITHUB_OUTPUT"
+            echo "ℹ️ No pending changesets found."
+          fi
 
       - name: Apply versions
         if: steps.plan.outputs.has_releases == 'true'
@@ -119,9 +145,15 @@ jobs:
         if: steps.plan.outputs.has_releases == 'true'
         shell: bash
         run: |
+          set -euo pipefail
           git add -A
-          git commit -m "chore(release): version packages (${{ inputs.channel }})"
-          git push origin "${{ inputs.ref }}"
+          # 只有在真的有變動時才 commit，避免 workflow 報錯
+          if git diff --staged --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "chore(release): version packages (${{ inputs.channel }})"
+            git push origin "${{ inputs.ref }}"
+          fi
 
       - name: Open PR back to main
         if: steps.plan.outputs.has_releases == 'true'
@@ -132,8 +164,11 @@ jobs:
           set -euo pipefail
           FROM="${{ inputs.ref }}"
           TO="main"
-          # 增加標籤區分是哪個 channel 回傳的
           TITLE="chore(release): sync ${FROM} (${{ inputs.channel }}) back to ${TO}"
+          BODY="Automated PR to sync versions and changelogs from ${FROM} to ${TO}."
+          
           if gh pr list --base "$TO" --head "$FROM" --state open --json number -q 'length' | grep -q '^0$'; then
-            gh pr create --base "$TO" --head "$FROM" --title "$TITLE" --body "Syncing version updates."
+            gh pr create --base "$TO" --head "$FROM" --title "$TITLE" --body "$BODY"
+          else
+            echo "PR already exists: ${FROM} -> ${TO}"
           fi
