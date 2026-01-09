@@ -13,6 +13,23 @@ on:
         type: string
         required: false
         default: 20.x
+
+      # ✅ 可切換：bot | actor（此 workflow 預設 bot）
+      git_identity_mode:
+        type: string
+        required: false
+        default: bot
+
+      # bot identity（可覆寫）
+      git_bot_name:
+        type: string
+        required: false
+        default: github-actions[bot]
+      git_bot_email:
+        type: string
+        required: false
+        default: 41898282+github-actions[bot]@users.noreply.github.com
+
     secrets:
       GIT_TOKEN:
         required: true
@@ -32,10 +49,29 @@ jobs:
           token: ${{ secrets.GIT_TOKEN }}
           ref: ${{ inputs.ref }}
 
-      - name: Git identity
+      - name: Git identity (bot|actor)
+        shell: bash
         run: |
-          git config --global user.email "royfuwei@gmail.com"
-          git config --global user.name "royfuwei"
+          set -euo pipefail
+          MODE="${{ inputs.git_identity_mode }}"
+          case "$MODE" in
+            bot)
+              git config --global user.name "${{ inputs.git_bot_name }}"
+              git config --global user.email "${{ inputs.git_bot_email }}"
+              ;;
+            actor)
+              git config --global user.name "${GITHUB_ACTOR}"
+              git config --global user.email "${GITHUB_ACTOR}@users.noreply.github.com"
+              ;;
+            *)
+              echo "❌ Unsupported git_identity_mode: $MODE (allowed: bot, actor)"
+              exit 1
+              ;;
+          esac
+
+          echo "Git identity:"
+          git config --global --get user.name
+          git config --global --get user.email
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
