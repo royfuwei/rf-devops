@@ -62,14 +62,39 @@ jobs:
           pnpm -v
           pnpm install --frozen-lockfile
 
+      - name: Ensure changesets baseBranch exists
+        shell: bash
+        run: |
+          BASE=$(node -p "require('./.changeset/config.json').baseBranch || 'main'")
+          echo "Changesets baseBranch: $BASE"
+
+          # 讓 origin/$BASE 一定存在
+          git fetch origin "$BASE":refs/remotes/origin/"$BASE"
+
+          # 建立/更新本地同名分支（@changesets/git 偶爾需要本地分支名）
+          git branch -f "$BASE" origin/"$BASE"
+
+          echo "== baseBranch head =="
+          git show -s --oneline "$BASE"
+
+      - name: Debug git refs (optional)
+        shell: bash
+        run: |
+          echo "is shallow? $(git rev-parse --is-shallow-repository)"
+          echo "branches:"
+          git branch -a | sed -n '1,200p'
+          echo "recent commits:"
+          git log --oneline --decorate -n 20
+
       # 沒 changeset 時，changeset version 會失敗；我們用 status 先判斷是否有 releases
       - name: Compute release plan
         id: plan
+        shell: bash
         run: |
           npx changeset status --output changeset-status.json
           node - <<'NODE'
           const fs = require('fs');
-          const s = JSON.parse(fs.readFileSync('changeset-status.json','utf8'));
+          const s = JSON.parse(fs.readFileSync('changeset-status.json', 'utf8'));
           const releases = Array.isArray(s.releases) ? s.releases : [];
           const has = releases.length > 0;
           fs.appendFileSync(process.env.GITHUB_OUTPUT, `has_releases=${has}\n`);
@@ -83,6 +108,7 @@ jobs:
 
       - name: Commit & push version bump
         if: steps.plan.outputs.has_releases == 'true'
+        shell: bash
         run: |
           git add -A
           git commit -m "chore(release): version packages" || echo "No changes"
@@ -97,6 +123,7 @@ jobs:
       # Turbo build：可只 build 要 publish 的 packages（用 filters）
       - name: Build (turbo only released packages)
         if: steps.plan.outputs.has_releases == 'true'
+        shell: bash
         run: |
           node - <<'NODE'
           const fs = require('fs');
