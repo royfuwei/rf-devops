@@ -6,34 +6,26 @@ on:
       ref:
         type: string
         required: true
-
       channel:
         type: string
         required: false
-        default: stable   # stable | alpha | beta | rc
-
+        default: stable  # stable | alpha | beta | rc
       node_version:
         type: string
         required: false
         default: 20.x
-
       build_task:
         type: string
         required: false
         default: build
-
       run_tests:
         type: boolean
         required: false
         default: false
-
-      # ✅ 可切換：bot | actor（此 workflow 預設 actor）
       git_identity_mode:
         type: string
         required: false
         default: actor
-
-      # bot identity（可覆寫）
       git_bot_name:
         type: string
         required: false
@@ -84,10 +76,6 @@ jobs:
               ;;
           esac
 
-          echo "Git identity:"
-          git config --global --get user.name
-          git config --global --get user.email
-
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
@@ -114,44 +102,58 @@ jobs:
               ;;
             *)
               echo "❌ Unsupported channel: $CHANNEL"
-              echo "Allowed channels: stable, alpha, beta, rc"
               exit 1
               ;;
           esac
 
-      # ✅ 重點：確保 changesets 的 baseBranch 在 runner 上一定存在（解 diverged error）
+      # ✅ 修正後的區塊：解決 git show-ref --remotes 報錯問題
       - name: Ensure changesets baseBranch exists (hard)
         shell: bash
         run: |
           set -euo pipefail
 
+          # 從 changeset config 取得 baseBranch (預設 main)
           BASE=$(node -p "require('./.changeset/config.json').baseBranch || 'main'")
           echo "Changesets baseBranch: $BASE"
 
-          echo "== before fetch, refs containing BASE =="
-          git show-ref --heads --remotes | grep -E "refs/heads/$BASE$|refs/remotes/origin/$BASE$" || true
-
           echo "== fetch origin/$BASE =="
-          # 用完整 refspec，避免 checkout 只抓單一 ref 的情況
+          # 強制 fetch 遠端 baseBranch 到本地的 remotes ref
           git fetch --no-tags --prune origin "+refs/heads/${BASE}:refs/remotes/origin/${BASE}"
 
           echo "== create/update local branch $BASE =="
+          # 強制建立/更新本地分支指向遠端追蹤分支
           git branch -f "$BASE" "refs/remotes/origin/${BASE}"
 
-          echo "== after fetch, verify =="
-          git show-ref --heads --remotes | grep -E "refs/heads/$BASE$|refs/remotes/origin/$BASE$" || (echo "❌ baseBranch '$BASE' not found on origin" && git branch -a && exit 1)
+          echo "== verify branch exists =="
+          # 使用 rev-parse 驗證分支是否存在，這在各版本 git 表現最穩定
+          if git rev-parse --verify "$BASE" >/dev/null 2>&1; then
+            echo "✅ Local branch '$BASE' is ready."
+          else
+            echo "❌ baseBranch '$BASE' not found on origin"
+            git branch -a
+            exit 1
+          fi
 
           echo "== baseBranch head =="
           git show -s --oneline "$BASE"
 
-      # ✅ 用 changesets 的 release plan 當作「真實 affected」→ 產生 turbo filters
       - name: Compute release plan (changesets) -> turbo filters
         id: plan
         shell: bash
         run: |
           set -euo pipefail
           npx changeset status --output changeset-status.json
-          node -e "const fs=require('fs'); const s=JSON.parse(fs.readFileSync('changeset-status.json','utf8')); const releases=Array.isArray(s.releases)?s.releases:[]; const has=releases.length>0; fs.appendFileSync(process.env.GITHUB_OUTPUT, 'has_releases='+has+'\\n'); const testFilters=releases.map(r=>'--filter='+r.name).join(' '); const buildFilters=releases.map(r=>'--filter='+r.name+'...').join(' '); fs.appendFileSync(process.env.GITHUB_OUTPUT, 'turbo_test_filters='+testFilters+'\\n'); fs.appendFileSync(process.env.GITHUB_OUTPUT, 'turbo_build_filters='+buildFilters+'\\n'); console.log('Releases:', releases.map(r=>r.name+'@'+r.newVersion)); console.log('Turbo test filters:', testFilters || '(none)'); console.log('Turbo build filters:', buildFilters || '(none)');"
+          node -e "
+            const fs=require('fs');
+            const s=JSON.parse(fs.readFileSync('changeset-status.json','utf8'));
+            const releases=Array.isArray(s.releases)?s.releases:[];
+            const has=releases.length>0;
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, 'has_releases='+has+'\\n');
+            const testFilters=releases.map(r=>'--filter='+r.name).join(' ');
+            const buildFilters=releases.map(r=>'--filter='+r.name+'...').join(' ');
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, 'turbo_test_filters='+testFilters+'\\n');
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, 'turbo_build_filters='+buildFilters+'\\n');
+          "
 
       - name: Test (turbo only released packages)
         if: steps.plan.outputs.has_releases == 'true' && inputs.run_tests
@@ -181,7 +183,6 @@ jobs:
             npx changeset publish --tag "$CHANNEL"
           fi
 
-      # ✅ 只有真的 publish 成功才打 tags
       - name: Tag workspace package versions
         if: steps.plan.outputs.has_releases == 'true' && success()
         shell: bash
