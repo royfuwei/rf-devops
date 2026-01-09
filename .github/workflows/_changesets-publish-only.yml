@@ -167,13 +167,23 @@ jobs:
         run: |
           set -euo pipefail
           CHANNEL="${{ inputs.channel }}"
-          echo "Publishing to channel: $CHANNEL"
-          
-          if [ "$CHANNEL" = "stable" ]; then
+          echo "Requested channel: $CHANNEL"
+
+          # 檢查是否在 Pre-mode (存在 pre.json)
+          if [ -f ".changeset/pre.json" ]; then
+            PRE_TAG=$(node -p "require('./.changeset/pre.json').tag")
+            echo "🦋 Changesets is in PRE-MODE (tag: $PRE_TAG)"
+            
+            # 在 Pre-mode 下，不允許使用 --tag 參數，它會自動使用 pre.json 裡的 tag
             npx changeset publish
           else
-            # 即使 .changeset 內沒有 .md，只要 package.json 版本大於 npm 版本，此指令也會成功
-            npx changeset publish --tag "$CHANNEL"
+            echo "🦋 Changesets is in STABLE-MODE"
+            if [ "$CHANNEL" = "stable" ]; then
+              npx changeset publish
+            else
+              # 非 Pre-mode 但指定了 channel (例如手動指定發佈到某 tag)
+              npx changeset publish --tag "$CHANNEL"
+            fi
           fi
 
       - name: Tag workspace package versions
