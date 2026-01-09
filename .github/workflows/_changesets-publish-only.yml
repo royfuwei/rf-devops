@@ -71,7 +71,7 @@ jobs:
               git config --global user.email "${GITHUB_ACTOR}@users.noreply.github.com"
               ;;
             *)
-              echo "❌ Unsupported git_identity_mode: $MODE (allowed: bot, actor)"
+              echo "❌ Unsupported git_identity_mode: $MODE"
               exit 1
               ;;
           esac
@@ -91,69 +91,59 @@ jobs:
       - name: Install deps
         run: pnpm install --frozen-lockfile
 
-      - name: Validate channel allowlist
-        shell: bash
-        run: |
-          set -euo pipefail
-          CHANNEL="${{ inputs.channel }}"
-          case "$CHANNEL" in
-            stable|alpha|beta|rc)
-              echo "Allowed channel: $CHANNEL"
-              ;;
-            *)
-              echo "❌ Unsupported channel: $CHANNEL"
-              exit 1
-              ;;
-          esac
-
-      # ✅ 修正後的區塊：解決 git show-ref --remotes 報錯問題
       - name: Ensure changesets baseBranch exists (hard)
         shell: bash
         run: |
           set -euo pipefail
-
-          # 從 changeset config 取得 baseBranch (預設 main)
           BASE=$(node -p "require('./.changeset/config.json').baseBranch || 'main'")
           echo "Changesets baseBranch: $BASE"
-
-          echo "== fetch origin/$BASE =="
-          # 強制 fetch 遠端 baseBranch 到本地的 remotes ref
           git fetch --no-tags --prune origin "+refs/heads/${BASE}:refs/remotes/origin/${BASE}"
-
-          echo "== create/update local branch $BASE =="
-          # 強制建立/更新本地分支指向遠端追蹤分支
           git branch -f "$BASE" "refs/remotes/origin/${BASE}"
-
-          echo "== verify branch exists =="
-          # 使用 rev-parse 驗證分支是否存在，這在各版本 git 表現最穩定
+          
           if git rev-parse --verify "$BASE" >/dev/null 2>&1; then
             echo "✅ Local branch '$BASE' is ready."
           else
-            echo "❌ baseBranch '$BASE' not found on origin"
-            git branch -a
+            echo "❌ baseBranch '$BASE' not found"
             exit 1
           fi
 
-          echo "== baseBranch head =="
-          git show -s --oneline "$BASE"
-
-      - name: Compute release plan (changesets) -> turbo filters
+      # ✅ 核心改動：改用 Git Diff 判斷版本變更，解決 alpha 被跳過的問題
+      - name: Compute release plan (Diff Mode)
         id: plan
         shell: bash
         run: |
           set -euo pipefail
-          npx changeset status --output changeset-status.json
-          node -e "
-            const fs=require('fs');
-            const s=JSON.parse(fs.readFileSync('changeset-status.json','utf8'));
-            const releases=Array.isArray(s.releases)?s.releases:[];
-            const has=releases.length>0;
-            fs.appendFileSync(process.env.GITHUB_OUTPUT, 'has_releases='+has+'\\n');
-            const testFilters=releases.map(r=>'--filter='+r.name).join(' ');
-            const buildFilters=releases.map(r=>'--filter='+r.name+'...').join(' ');
-            fs.appendFileSync(process.env.GITHUB_OUTPUT, 'turbo_test_filters='+testFilters+'\\n');
-            fs.appendFileSync(process.env.GITHUB_OUTPUT, 'turbo_build_filters='+buildFilters+'\\n');
-          "
+          BASE=$(node -p "require('./.changeset/config.json').baseBranch || 'main'")
+          
+          echo "Comparing current ref (${{ inputs.ref }}) with $BASE"
+          
+          # 找出 package.json 有被更動過的目錄
+          CHANGED_DIRS=$(git diff --name-only origin/$BASE...HEAD | grep 'package.json' | xargs -I {} dirname {} | sort -u || echo "")
+          
+          HAS_RELEASES=false
+          TEST_FILTERS=""
+          BUILD_FILTERS=""
+          
+          for dir in $CHANGED_DIRS; do
+            if [ -f "$dir/package.json" ]; then
+              PKG_NAME=$(node -p "require('./$dir/package.json').name" 2>/dev/null || echo "")
+              # 排除掉 root 或是無效的名稱
+              if [ -n "$PKG_NAME" ] && [ "$PKG_NAME" != "undefined" ]; then
+                echo "Found changed package: $PKG_NAME"
+                HAS_RELEASES=true
+                TEST_FILTERS="$TEST_FILTERS --filter=$PKG_NAME"
+                BUILD_FILTERS="$BUILD_FILTERS --filter=$PKG_NAME..."
+              fi
+            fi
+          done
+          
+          echo "has_releases=$HAS_RELEASES" >> "$GITHUB_OUTPUT"
+          echo "turbo_test_filters=$TEST_FILTERS" >> "$GITHUB_OUTPUT"
+          echo "turbo_build_filters=$BUILD_FILTERS" >> "$GITHUB_OUTPUT"
+          
+          echo "== Summary =="
+          echo "Has Releases: $HAS_RELEASES"
+          echo "Build Filters: $BUILD_FILTERS"
 
       - name: Test (turbo only released packages)
         if: steps.plan.outputs.has_releases == 'true' && inputs.run_tests
@@ -177,9 +167,12 @@ jobs:
         run: |
           set -euo pipefail
           CHANNEL="${{ inputs.channel }}"
+          echo "Publishing to channel: $CHANNEL"
+          
           if [ "$CHANNEL" = "stable" ]; then
             npx changeset publish
           else
+            # 即使 .changeset 內沒有 .md，只要 package.json 版本大於 npm 版本，此指令也會成功
             npx changeset publish --tag "$CHANNEL"
           fi
 

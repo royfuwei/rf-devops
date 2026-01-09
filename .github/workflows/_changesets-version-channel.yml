@@ -13,14 +13,10 @@ on:
         type: string
         required: false
         default: 20.x
-
-      # ✅ 可切換：bot | actor（此 workflow 預設 bot）
       git_identity_mode:
         type: string
         required: false
         default: bot
-
-      # bot identity（可覆寫）
       git_bot_name:
         type: string
         required: false
@@ -49,29 +45,17 @@ jobs:
           token: ${{ secrets.GIT_TOKEN }}
           ref: ${{ inputs.ref }}
 
-      - name: Git identity (bot|actor)
+      - name: Git identity
         shell: bash
         run: |
           set -euo pipefail
-          MODE="${{ inputs.git_identity_mode }}"
-          case "$MODE" in
-            bot)
-              git config --global user.name "${{ inputs.git_bot_name }}"
-              git config --global user.email "${{ inputs.git_bot_email }}"
-              ;;
-            actor)
-              git config --global user.name "${GITHUB_ACTOR}"
-              git config --global user.email "${GITHUB_ACTOR}@users.noreply.github.com"
-              ;;
-            *)
-              echo "❌ Unsupported git_identity_mode: $MODE (allowed: bot, actor)"
-              exit 1
-              ;;
-          esac
-
-          echo "Git identity:"
-          git config --global --get user.name
-          git config --global --get user.email
+          if [ "${{ inputs.git_identity_mode }}" = "bot" ]; then
+            git config --global user.name "${{ inputs.git_bot_name }}"
+            git config --global user.email "${{ inputs.git_bot_email }}"
+          else
+            git config --global user.name "${GITHUB_ACTOR}"
+            git config --global user.email "${GITHUB_ACTOR}@users.noreply.github.com"
+          fi
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -87,64 +71,34 @@ jobs:
       - name: Install deps
         run: pnpm install --frozen-lockfile
 
+      # ✅ 更新此區塊以維持指令相容性
       - name: Ensure changesets baseBranch exists
         shell: bash
         run: |
+          set -euo pipefail
           BASE=$(node -p "require('./.changeset/config.json').baseBranch || 'main'")
           echo "Changesets baseBranch: $BASE"
-          git fetch origin "$BASE":refs/remotes/origin/"$BASE"
-          git branch -f "$BASE" origin/"$BASE"
-          git show -s --oneline "$BASE"
+          git fetch origin "+refs/heads/${BASE}:refs/remotes/origin/${BASE}"
+          git branch -f "$BASE" "refs/remotes/origin/${BASE}"
 
-      - name: Validate channel allowlist
+      - name: Enter/Exit pre mode
         shell: bash
         run: |
           set -euo pipefail
           CHANNEL="${{ inputs.channel }}"
-          case "$CHANNEL" in
-            stable|alpha|beta|rc)
-              echo "Allowed channel: $CHANNEL"
-              ;;
-            *)
-              echo "❌ Unsupported channel: $CHANNEL"
-              echo "Allowed channels: stable, alpha, beta, rc"
-              exit 1
-              ;;
-          esac
-
-      - name: Enter/Exit pre mode (multi-channel)
-        shell: bash
-        run: |
-          set -euo pipefail
-          CHANNEL="${{ inputs.channel }}"
-
-          current_pre_tag() {
-            if [ ! -f ".changeset/pre.json" ]; then
-              echo ""
-              return 0
-            fi
-            node -p "(() => { try { return require('./.changeset/pre.json').tag || '' } catch(e) { return '' } })()"
-          }
-
+          
           if [ "$CHANNEL" = "stable" ]; then
             if [ -f ".changeset/pre.json" ]; then
-              echo "Exiting pre mode..."
               npx changeset pre exit
-            else
-              echo "Not in pre mode."
             fi
           else
             if [ -f ".changeset/pre.json" ]; then
-              CUR="$(current_pre_tag)"
-              if [ -n "$CUR" ] && [ "$CUR" != "$CHANNEL" ]; then
-                echo "Switch pre mode: $CUR -> $CHANNEL"
+              CUR=$(node -p "require('./.changeset/pre.json').tag")
+              if [ "$CUR" != "$CHANNEL" ]; then
                 npx changeset pre exit
                 npx changeset pre enter "$CHANNEL"
-              else
-                echo "Already in pre mode ($CHANNEL)."
               fi
             else
-              echo "Entering pre mode: $CHANNEL"
               npx changeset pre enter "$CHANNEL"
             fi
           fi
@@ -154,14 +108,8 @@ jobs:
         shell: bash
         run: |
           npx changeset status --output changeset-status.json
-          node - <<'NODE'
-          const fs = require('fs');
-          const s = JSON.parse(fs.readFileSync('changeset-status.json','utf8'));
-          const releases = Array.isArray(s.releases) ? s.releases : [];
-          const has = releases.length > 0;
-          fs.appendFileSync(process.env.GITHUB_OUTPUT, `has_releases=${has}\n`);
-          console.log('Releases:', releases.map(r => `${r.name}@${r.newVersion}`));
-          NODE
+          HAS=$(node -p "JSON.parse(require('fs').readFileSync('changeset-status.json')).releases.length > 0")
+          echo "has_releases=$HAS" >> "$GITHUB_OUTPUT"
 
       - name: Apply versions
         if: steps.plan.outputs.has_releases == 'true'
@@ -172,7 +120,7 @@ jobs:
         shell: bash
         run: |
           git add -A
-          git commit -m "chore(release): version packages" || echo "No changes"
+          git commit -m "chore(release): version packages (${{ inputs.channel }})"
           git push origin "${{ inputs.ref }}"
 
       - name: Open PR back to main
@@ -184,11 +132,8 @@ jobs:
           set -euo pipefail
           FROM="${{ inputs.ref }}"
           TO="main"
-          TITLE="chore(release): sync ${FROM} back to ${TO}"
-          BODY="Automated PR to keep main updated with version bumps, changelog, and consumed changesets."
-
+          # 增加標籤區分是哪個 channel 回傳的
+          TITLE="chore(release): sync ${FROM} (${{ inputs.channel }}) back to ${TO}"
           if gh pr list --base "$TO" --head "$FROM" --state open --json number -q 'length' | grep -q '^0$'; then
-            gh pr create --base "$TO" --head "$FROM" --title "$TITLE" --body "$BODY"
-          else
-            echo "PR already exists: ${FROM} -> ${TO}"
+            gh pr create --base "$TO" --head "$FROM" --title "$TITLE" --body "Syncing version updates."
           fi
