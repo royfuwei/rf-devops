@@ -1,0 +1,121 @@
+name: Deploy rfjs k8s (Granular)
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        type: string
+        required: true
+      environment:
+        type: string
+        default: k8s-royfuwei
+      namespace:
+        type: string
+        default: rfjs
+    secrets:
+      GIT_TOKEN: { required: true }
+      KUBE_CONFIG: { required: true }
+      HARBOR_HOST: { required: true }
+      HARBOR_USERNAME: { required: true }
+      HARBOR_TOKEN: { required: true }
+
+jobs:
+  # --- Job 1: 偵測變動的 Apps (Matrix Generator) ---
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      apps_matrix: ${{ steps.set-matrix.outputs.matrix }}
+      has_apps: ${{ steps.set-matrix.outputs.has_apps }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GIT_TOKEN }}
+          ref: ${{ inputs.ref }}
+
+      - name: Compute App Matrix
+        id: set-matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          # 1. 建立對比基準 (對比 main 分支)
+          BASE=$(node -p "require('./.changeset/config.json').baseBranch || 'main'")
+          git fetch origin "+refs/heads/${BASE}:refs/remotes/origin/${BASE}"
+          git branch -f "$BASE" "refs/remotes/origin/${BASE}"
+
+          # 2. 找出 apps/ 下 package.json 有變動的目錄
+          CHANGED_JSONS=$(git diff --name-only origin/$BASE...HEAD | grep '^apps/.*package.json$' || echo "")
+          
+          MATRIX_JSON="[]"
+          HAS_APPS=false
+
+          for file in $CHANGED_JSONS; do
+            DIR=$(dirname $file)
+            APP_ID=$(basename $DIR)
+            PKG_NAME=$(node -p "require('./$DIR/package.json').name")
+            VERSION=$(node -p "require('./$DIR/package.json').version")
+
+            # 確保該目錄下有 Dockerfile 才加入 Matrix
+            if [ -f "$DIR/Dockerfile" ]; then
+              echo "🎯 Detected Change: $APP_ID v$VERSION"
+              MATRIX_JSON=$(echo $MATRIX_JSON | jq -c ". += [{\"id\": \"$APP_ID\", \"pkg\": \"$PKG_NAME\", \"version\": \"$VERSION\", \"path\": \"$DIR\"}]")
+              HAS_APPS=true
+            fi
+          done
+
+          echo "matrix=$MATRIX_JSON" >> "$GITHUB_OUTPUT"
+          echo "has_apps=$HAS_APPS" >> "$GITHUB_OUTPUT"
+
+  # --- Job 2: 並行 Build Docker Images (如有 3 個 App 動，則開 3 個 Job) ---
+  docker-build:
+    needs: detect
+    if: needs.detect.outputs.has_apps == 'true'
+    strategy:
+      fail-fast: false # 讓不同 App 的 Build 互不影響
+      matrix:
+        app: ${{ fromJson(needs.detect.outputs.apps_matrix) }}
+    # 呼叫你剛才命名的 Reusable Turbo Docker Workflow
+    uses: ./.github/workflows/_release-turbo-docker.yml
+    with:
+      projectName: rfjs-${{ matrix.app.id }}
+      projectSource: royfuwei
+      version: ${{ matrix.app.version }}
+      buildPath: ./${{ matrix.app.path }}/Dockerfile
+      environment: ${{ inputs.environment }}
+    secrets: inherit
+
+  # --- Job 3: 最終統一部署 (所有 Build 成功後執行一次) ---
+  deploy-k8s:
+    needs: [detect, docker-build]
+    # 即使沒有 App 變動也會檢查，但我們透過 if 擋住
+    if: needs.detect.outputs.has_apps == 'true'
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Checkout DevOps Tools
+        uses: actions/checkout@v4
+        with:
+          repository: royfuwei/rf-devops
+          token: ${{ secrets.GIT_TOKEN }}
+
+      - name: Deploy via Helm
+        uses: WyriHaximus/github-action-helm3@v3
+        env:
+          KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG }}
+          # 傳遞變動清單 JSON 給部署腳本
+          APPS_JSON: ${{ needs.detect.outputs.apps_matrix }}
+          NAMESPACE: ${{ inputs.namespace }}
+          # 這裡放入你所有的 ENV Secrets
+          ENV_DB_MONGO_URI: ${{ secrets.ENV_DB_MONGO_URI }}
+          ENV_PUBLIC_SUPABASE_URL: ${{ secrets.ENV_PUBLIC_SUPABASE_URL }}
+          # ... 其餘 Secrets
+        with:
+          kubeconfig: '${{ secrets.KUBE_CONFIG }}'
+          overrule_existing_kubeconfig: "true"
+          exec: |
+            chmod 600 $HOME/.kube/config
+            # 1. 建立 K8S Secrets (如果需要)
+            ./rfjs/deploy-secret.sh
+            # 2. 執行「細顆粒度」部署腳本
+            # 我們將 JSON 字串傳給腳本處理
+            bash ./rfjs/deploy-granular.sh "$APPS_JSON" "$NAMESPACE"
