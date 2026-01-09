@@ -6,18 +6,22 @@ on:
       ref:
         type: string
         required: true
+
       channel:
         type: string
         required: false
         default: stable   # stable | alpha | beta | rc
+
       node_version:
         type: string
         required: false
         default: 20.x
+
       build_task:
         type: string
         required: false
         default: build
+
       run_tests:
         type: boolean
         required: false
@@ -115,14 +119,31 @@ jobs:
               ;;
           esac
 
-      - name: Test
-        if: inputs.run_tests
-        run: pnpm -r test --if-present
+      # ✅ 用 changesets 的 release plan 當作「真實 affected」，再轉成 turbo filters
+      - name: Compute release plan (changesets) -> turbo filters
+        id: plan
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx changeset status --output changeset-status.json
+          node -e "const fs=require('fs'); const s=JSON.parse(fs.readFileSync('changeset-status.json','utf8')); const releases=Array.isArray(s.releases)?s.releases:[]; const has=releases.length>0; fs.appendFileSync(process.env.GITHUB_OUTPUT, 'has_releases='+has+'\\n'); const filters=releases.map(r=>'--filter='+r.name).join(' '); fs.appendFileSync(process.env.GITHUB_OUTPUT, 'turbo_filters='+filters+'\\n'); console.log('Releases:', releases.map(r=>r.name+'@'+r.newVersion)); console.log('Turbo filters:', filters || '(none)');"
 
-      - name: Build
-        run: pnpm turbo run ${{ inputs.build_task }}
+      - name: Test (turbo only released packages)
+        if: steps.plan.outputs.has_releases == 'true' && inputs.run_tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm turbo run test ${{ steps.plan.outputs.turbo_filters }} --continue
+
+      - name: Build (turbo only released packages)
+        if: steps.plan.outputs.has_releases == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm turbo run ${{ inputs.build_task }} ${{ steps.plan.outputs.turbo_filters }}
 
       - name: Publish to npm (changesets)
+        if: steps.plan.outputs.has_releases == 'true'
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         shell: bash
@@ -135,8 +156,9 @@ jobs:
             npx changeset publish --tag "$CHANNEL"
           fi
 
+      # ✅ 只有真的 publish 成功才打 tags（避免空跑/誤打）
       - name: Tag workspace package versions
-        if: success()
+        if: steps.plan.outputs.has_releases == 'true' && success()
         shell: bash
         run: |
           set -euo pipefail
