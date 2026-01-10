@@ -92,7 +92,6 @@ jobs:
   # --- Job 3: 最終統一部署 (所有 Build 成功後執行一次) ---
   deploy-k8s:
     needs: [detect, docker-build]
-    # 即使沒有 App 變動也會檢查，但我們透過 if 擋住
     if: needs.detect.outputs.has_apps == 'true'
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
@@ -107,20 +106,19 @@ jobs:
         uses: WyriHaximus/github-action-helm3@v3
         env:
           KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG }}
-          # 傳遞變動清單 JSON 給部署腳本
-          APPS_JSON: ${{ needs.detect.outputs.apps_matrix }}
-          NAMESPACE: ${{ inputs.namespace }}
-          # 這裡放入你所有的 ENV Secrets
-          ENV_DB_MONGO_URI: ${{ secrets.ENV_DB_MONGO_URI }}
-          ENV_PUBLIC_SUPABASE_URL: ${{ secrets.ENV_PUBLIC_SUPABASE_URL }}
-          # ... 其餘 Secrets
+          HARBOR_HOST: ${{ secrets.HARBOR_HOST }}
+          HARBOR_USERNAME: ${{ secrets.HARBOR_USERNAME }}
+          HARBOR_TOKEN: ${{ secrets.HARBOR_TOKEN }}
+          # ✅ 這裡必須手動列出所有在 .keys 檔案中定義過的變數
+          # 這是為了讓 deploy-secret.sh 的 ${!key} 能抓到值
+          DATABASE_URL: ${{ secrets.ENV_DATABASE_URL }}
+          APP_NAME: ${{ secrets.ENV_API_APP_NAME }}
         with:
           kubeconfig: '${{ secrets.KUBE_CONFIG }}'
           overrule_existing_kubeconfig: "true"
           exec: |
-            chmod 600 $HOME/.kube/config
-            # 1. 建立 K8S Secrets (如果需要)
-            ./rfjs/deploy-secret.sh
-            # 2. 執行「細顆粒度」部署腳本
-            # 我們將 JSON 字串傳給腳本處理
-            bash ./rfjs/deploy-granular.sh "$APPS_JSON" "$NAMESPACE"
+            # 確保在 rf-devops 根目錄執行，路徑會最準確
+            bash ./rfjs/deploy-granular.sh \
+              '${{ needs.detect.outputs.apps_matrix }}' \
+              '${{ inputs.namespace }}' \
+              '${{ inputs.environment }}'
