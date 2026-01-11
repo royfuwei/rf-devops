@@ -5,7 +5,7 @@ metadata:
   labels:
     app.kubernetes.io/name: {{ include "rfjs-service.fullname" . }}
 spec:
-  replicas: {{ .Values.replicaCount }}
+  replicas: {{ .Values.replicaCount | default 1 }}
   selector:
     matchLabels:
       app.kubernetes.io/name: {{ include "rfjs-service.fullname" . }}
@@ -14,12 +14,17 @@ spec:
       labels:
         app.kubernetes.io/name: {{ include "rfjs-service.fullname" . }}
     spec:
+      # ✅ 1. 修正：明確指定抓取 Harbor 鏡像所需的 Secret
+      imagePullSecrets:
+        - name: harbor-registry-secret
+      
       containers:
         - name: {{ include "rfjs-service.fullname" . }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          # ✅ 2. 優化：增加預設值，防止 api.yaml 沒設定時噴錯
+          imagePullPolicy: {{ .Values.image.pullPolicy | default "Always" }}
           ports:
-            - containerPort: {{ .Values.containerPort }}
+            - containerPort: {{ .Values.containerPort | default 3000 }}
               name: http
           env:
             {{- range $k, $v := .Values.env }}
@@ -33,19 +38,31 @@ spec:
                 name: {{ .Values.secrets.existingSecretName }}
           {{- end }}
 
+          # ✅ 3. 注意：請確認你的 App 真的有 /health 路由
+          # 如果沒有，Probe 會失敗導致 Pod 不斷重啟 (CrashLoopBackOff)
           readinessProbe:
             httpGet:
               path: /health
-              port: {{ .Values.containerPort }}
+              port: {{ .Values.containerPort | default 3000 }}
             initialDelaySeconds: 5
             periodSeconds: 10
 
           livenessProbe:
             httpGet:
               path: /health
-              port: {{ .Values.containerPort }}
+              port: {{ .Values.containerPort | default 3000 }}
             initialDelaySeconds: 15
             periodSeconds: 20
 
           resources:
+            {{- if .Values.resources }}
             {{- toYaml .Values.resources | nindent 12 }}
+            {{- else }}
+            # 預設給一點基礎資源，避免超時
+            limits:
+              cpu: 500m
+              memory: 512Mi
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            {{- end }}
