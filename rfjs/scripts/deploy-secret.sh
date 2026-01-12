@@ -43,9 +43,11 @@ ENV_DIR="${ROOT_DIR}/rfjs/env/${ENV_NAME}"
 KEYS_FILE="${ENV_DIR}/${SERVICE_NAME}.secrets.keys"
 COMMON_KEYS_FILE="${ENV_DIR}/common.secrets.keys"
 
+# ✅ 修正：如果找不到 keys 檔案，優雅跳過而不是報錯
 if [[ ! -f "$KEYS_FILE" ]]; then
-  echo "❌ keys file not found: $KEYS_FILE"
-  exit 1
+  echo "ℹ️ No specific keys file found for $SERVICE_NAME at $KEYS_FILE. Skipping generic secret creation."
+  # 如果連 common 也沒必要跑，就直接結束這個腳本
+  exit 0
 fi
 
 # 讀 keys（忽略空白與 # 註解）
