@@ -10,6 +10,9 @@ secrets:
   existingSecretName: orm-app-env
   useEnvFrom: true
 
+probes:
+  enabled: false  # ✅ 針對非 Web App 關閉健康檢查
+  
 ingress:
   enabled: false
   # # 把 certManager 相關設定移到外面，不要混在 tls 數組裡
