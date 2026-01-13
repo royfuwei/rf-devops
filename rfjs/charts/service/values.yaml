@@ -17,6 +17,9 @@ secrets:
   existingSecretName: ""  # e.g. api-env
   useEnvFrom: true        # 以 envFrom 引用整包 secret
 
+probes:
+  enabled: false # 給一個預設值
+  
 env: {}
 secretEnv: {}
 
