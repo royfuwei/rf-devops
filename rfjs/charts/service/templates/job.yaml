@@ -1,0 +1,27 @@
+{{- if eq .Values.kind "Job" -}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "rfjs-service.fullname" . }}-{{ .Release.Revision }} # 加上 Revision 確保每次執行名字不同
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure # Job 必須指定重啟策略
+      imagePullSecrets:
+        - name: harbor-registry-secret
+      containers:
+        - name: {{ include "rfjs-service.fullname" . }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          # Job 通常不需要 ports 和 probes
+          env:
+            {{- range $k, $v := .Values.env }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
+            {{- end }}
+          {{- if and .Values.secrets.existingSecretName .Values.secrets.useEnvFrom }}
+          envFrom:
+            - secretRef:
+                name: {{ .Values.secrets.existingSecretName }}
+          {{- end }}
+  backoffLimit: 4
+{{- end }}
