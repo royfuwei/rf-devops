@@ -3,24 +3,19 @@ name: Deploy rfjs k8s (Granular)
 on:
   workflow_call:
     inputs:
-      ref:
-        type: string
-        required: true
-      environment:
-        type: string
-        default: k8s-royfuwei
-      namespace:
-        type: string
-        default: rfjs
+      ref: { type: string, required: true }
+      environment: { type: string, default: k8s-royfuwei }
+      namespace: { type: string, default: rfjs }
     secrets:
       GIT_TOKEN: { required: true }
       KUBE_CONFIG: { required: true }
       HARBOR_HOST: { required: true }
       HARBOR_USERNAME: { required: true }
       HARBOR_TOKEN: { required: true }
+      ENV_DATABASE_URL: { required: false }
+      ENV_API_APP_NAME: { required: false }
 
 jobs:
-  # --- Job 1: 偵測變動的 Apps (Matrix Generator) ---
   detect:
     runs-on: ubuntu-latest
     outputs:
@@ -32,41 +27,30 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GIT_TOKEN }}
           ref: ${{ inputs.ref }}
-
       - name: Compute App Matrix
         id: set-matrix
         shell: bash
         run: |
           set -euo pipefail
-          # 1. 建立對比基準 (對比 main 分支)
           BASE=$(node -p "require('./.changeset/config.json').baseBranch || 'main'")
           git fetch origin "+refs/heads/${BASE}:refs/remotes/origin/${BASE}"
           git branch -f "$BASE" "refs/remotes/origin/${BASE}"
-
-          # 2. 找出 apps/ 下 package.json 有變動的目錄
           CHANGED_JSONS=$(git diff --name-only origin/$BASE...HEAD | grep '^apps/.*package.json$' || echo "")
-          
           MATRIX_JSON="[]"
           HAS_APPS=false
-
           for file in $CHANGED_JSONS; do
             DIR=$(dirname $file)
             APP_ID=$(basename $DIR)
             PKG_NAME=$(node -p "require('./$DIR/package.json').name")
             VERSION=$(node -p "require('./$DIR/package.json').version")
-
-            # 確保該目錄下有 Dockerfile 才加入 Matrix
             if [ -f "$DIR/Dockerfile" ]; then
-              echo "🎯 Detected Change: $APP_ID v$VERSION"
               MATRIX_JSON=$(echo $MATRIX_JSON | jq -c ". += [{\"id\": \"$APP_ID\", \"pkg\": \"$PKG_NAME\", \"version\": \"$VERSION\", \"path\": \"$DIR\"}]")
               HAS_APPS=true
             fi
           done
-
           echo "matrix=$MATRIX_JSON" >> "$GITHUB_OUTPUT"
           echo "has_apps=$HAS_APPS" >> "$GITHUB_OUTPUT"
 
-  # --- Job 2: 並行 Build Docker Images (如有 3 個 App 動，則開 3 個 Job) ---
   docker-build:
     needs: detect
     if: needs.detect.outputs.has_apps == 'true'
@@ -81,17 +65,29 @@ jobs:
       version: ${{ matrix.app.version }}
       buildPath: ./${{ matrix.app.path }}/Dockerfile
       environment: ${{ inputs.environment }}
-    # ❌ 移除 secrets: inherit
-    # ✅ 改為明確傳遞，確保名稱與 _release-turbo-docker.yml 的 inputs 對齊
     secrets:
       HARBOR_HOST: ${{ secrets.HARBOR_HOST }}
       HARBOR_USERNAME: ${{ secrets.HARBOR_USERNAME }}
       HARBOR_TOKEN: ${{ secrets.HARBOR_TOKEN }}
-      envPAT: ${{ secrets.GIT_TOKEN }} # 這裡將 GIT_TOKEN 映射給子 workflow 的 envPAT
+      envPAT: ${{ secrets.GIT_TOKEN }}
 
-  # --- Job 3: 最終統一部署 (所有 Build 成功後執行一次) ---
+  # ✅ 動態發佈通用的 Helm Chart OCI
+  helm-release:
+    needs: detect
+    if: needs.detect.outputs.has_apps == 'true'
+    strategy:
+      matrix:
+        app: ${{ fromJson(needs.detect.outputs.apps_matrix) }}
+    uses: ./.github/workflows/_release-helm-service.yml
+    with:
+      app_version: ${{ matrix.app.version }}
+    secrets:
+      HARBOR_HOST: ${{ secrets.HARBOR_HOST }}
+      HARBOR_USERNAME: ${{ secrets.HARBOR_USERNAME }}
+      HARBOR_TOKEN: ${{ secrets.HARBOR_TOKEN }}
+
   deploy-k8s:
-    needs: [detect, docker-build]
+    needs: [detect, docker-build, helm-release]
     if: needs.detect.outputs.has_apps == 'true'
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
@@ -101,7 +97,6 @@ jobs:
         with:
           repository: royfuwei/rf-devops
           token: ${{ secrets.GIT_TOKEN }}
-
       - name: Deploy via Helm
         uses: WyriHaximus/github-action-helm3@v3
         env:
@@ -109,15 +104,13 @@ jobs:
           HARBOR_HOST: ${{ secrets.HARBOR_HOST }}
           HARBOR_USERNAME: ${{ secrets.HARBOR_USERNAME }}
           HARBOR_TOKEN: ${{ secrets.HARBOR_TOKEN }}
-          # ✅ 這裡必須手動列出所有在 .keys 檔案中定義過的變數
-          # 這是為了讓 deploy-secret.sh 的 ${!key} 能抓到值
+          # ✅ 開啟 OCI 模式，指向量產型 Repo
+          CHART_OCI_REPO: "oci://${{ secrets.HARBOR_HOST }}/royfuwei/charts/rfjs-service"
           DATABASE_URL: ${{ secrets.ENV_DATABASE_URL }}
           APP_NAME: ${{ secrets.ENV_API_APP_NAME }}
         with:
           kubeconfig: '${{ secrets.KUBE_CONFIG }}'
-          overrule_existing_kubeconfig: "true"
           exec: |
-            # 確保在 rf-devops 根目錄執行，路徑會最準確
             bash ./rfjs/deploy-granular.sh \
               '${{ needs.detect.outputs.apps_matrix }}' \
               '${{ inputs.namespace }}' \

@@ -1,0 +1,29 @@
+name: Release Helm Service Chart (OCI)
+
+on:
+  workflow_call:
+    inputs:
+      app_version: { required: true, type: string }
+    secrets:
+      HARBOR_HOST: { required: true }
+      HARBOR_USERNAME: { required: true }
+      HARBOR_TOKEN: { required: true }
+
+jobs:
+  release-helm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Helm
+        uses: azure/setup-helm@v3
+      - name: Login to Harbor
+        run: |
+          echo "${{ secrets.HARBOR_TOKEN }}" | helm registry login ${{ secrets.HARBOR_HOST }} \
+            --username ${{ secrets.HARBOR_USERNAME }} --password-stdin
+      - name: Package and Push
+        run: |
+          CHART_PATH="rfjs/charts/service"
+          DYNAMIC_VERSION="${{ inputs.app_version }}"
+          # 強制版本同步
+          helm package $CHART_PATH --version "$DYNAMIC_VERSION" --app-version "$DYNAMIC_VERSION"
+          helm push rfjs-service-${DYNAMIC_VERSION}.tgz oci://${{ secrets.HARBOR_HOST }}/royfuwei/charts
