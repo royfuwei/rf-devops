@@ -85,6 +85,7 @@ jobs:
       HARBOR_HOST: ${{ secrets.HARBOR_HOST }}
       HARBOR_USERNAME: ${{ secrets.HARBOR_USERNAME }}
       HARBOR_TOKEN: ${{ secrets.HARBOR_TOKEN }}
+      GIT_TOKEN: ${{ secrets.GIT_TOKEN }}
 
   deploy-k8s:
     needs: [detect, docker-build, helm-release]
