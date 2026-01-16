@@ -1,4 +1,4 @@
-name: Changesets Version (by channel)
+name: Changesets Version Turbo (by channel)
 
 on:
   workflow_call:
@@ -78,6 +78,13 @@ jobs:
           BASE=$(node -p "require('./.changeset/config.json').baseBranch || 'main'")
           git fetch origin "+refs/heads/${BASE}:refs/remotes/origin/${BASE}"
           git branch -f "$BASE" "refs/remotes/origin/${BASE}"
+          
+          if git rev-parse --verify "$BASE" >/dev/null 2>&1; then
+            echo "✅ Local branch '$BASE' is ready."
+          else
+            echo "❌ baseBranch '$BASE' not found"
+            exit 1
+          fi
 
       - name: Enter/Exit pre mode
         shell: bash
@@ -105,29 +112,39 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # 檢查是否有 changeset 檔案
           CHANGESET_FILES=$(ls .changeset/*.md 2>/dev/null | grep -v 'README.md' || echo "")
+          npx changeset status --output changeset-status.json
+          HAS_RELEASES_BY_STATUS=$(node -p "JSON.parse(require('fs').readFileSync('changeset-status.json')).releases.length > 0" 2>/dev/null || echo "false")
           
-          # 簡化判斷，只要有 .md 檔案就視為需要發布
-          if [ -n "$CHANGESET_FILES" ]; then
+          if [ -n "$CHANGESET_FILES" ] || [ "$HAS_RELEASES_BY_STATUS" = "true" ]; then
             echo "has_releases=true" >> "$GITHUB_OUTPUT"
+            # 產生 Turbo filters 用於後續編譯與測試
+            node -e "
+              const s=JSON.parse(require('fs').readFileSync('changeset-status.json','utf8'));
+              const releases=s.releases || [];
+              const buildFilters=releases.map(r=>'--filter='+r.name+'...').join(' ');
+              const testFilters=releases.map(r=>'--filter='+r.name).join(' ');
+              require('fs').appendFileSync(process.env.GITHUB_OUTPUT, 'turbo_build_filters='+buildFilters+'\n');
+              require('fs').appendFileSync(process.env.GITHUB_OUTPUT, 'turbo_test_filters='+testFilters+'\n');
+            "
           else
             echo "has_releases=false" >> "$GITHUB_OUTPUT"
           fi
 
-      # 直接執行 pnpm build，不再使用 turbo filter
-      - name: Build project
+      # ✅ 關鍵修正：在版本化之前先 Build 依賴項
+      # 這能解決 test 階段找不到 @rfjs/orm-drizzle 的問題
+      - name: Build dependencies
         if: steps.plan.outputs.has_releases == 'true'
-        run: pnpm build
+        run: pnpm turbo run build ${{ steps.plan.outputs.turbo_build_filters }}
 
-      # 如果需要跑測試，直接執行 pnpm test
-      - name: Run tests
-        if: steps.plan.outputs.has_releases == 'true'
-        run: pnpm test
+      # ✅ 如果你有在 Version 階段跑測試，確保在此時跑
+      # - name: Run tests
+      #   if: steps.plan.outputs.has_releases == 'true'
+      #   run: pnpm turbo run test ${{ steps.plan.outputs.turbo_test_filters }}
 
       - name: Apply versions
         if: steps.plan.outputs.has_releases == 'true'
-        run: pnpm changeset:version
+        run: npx changeset version
 
       - name: Commit & push
         if: steps.plan.outputs.has_releases == 'true'
