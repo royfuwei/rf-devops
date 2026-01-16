@@ -1,0 +1,60 @@
+kind: Job
+
+fullnameOverride: orm-app
+
+# Job 不需要 Ingress, Service, 或 Probes
+probes:
+  enabled: false
+# 可以傳入特定參數執行 migration
+# env:
+#   COMMAND: "npm run migrate"
+
+secretEnv: {}
+
+secrets:
+  existingSecretName: orm-app-env
+  useEnvFrom: true
+
+  
+ingress:
+  enabled: false
+  # # 把 certManager 相關設定移到外面，不要混在 tls 數組裡
+  # certManager:
+  #   enabled: true
+  #   issuerType: cluster-issuer
+  #   issuerName: letsencrypt-dns
+  #   keepCertificate: false
+  
+  # annotations:
+  #   kubernetes.io/ingress.class: nginx # 建議補上這個
+  #   nginx.ingress.kubernetes.io/proxy-body-size: '0'
+  #   # ... 其餘 annotations
+  #   cert-manager.io/cluster-issuer: letsencrypt-dns
+
+  # hosts:
+  #   - host: rfjs.api.royfuwei.dev
+  #     paths:
+  #       - path: /
+  #         pathType: Prefix
+
+  # # ✅ 修正這裡：改為數組格式
+  # tls:
+  #   - secretName: rfjs-tls-secret
+  #     hosts:
+  #       - rfjs.api.royfuwei.dev
+
+# Traefik + cert-manager
+# ingress:
+#   enabled: true
+#   className: traefik
+#   annotations:
+#     cert-manager.io/cluster-issuer: "letsencrypt-prod"
+#   hosts:
+#     - host: api.royfuwei.dev
+#       paths:
+#         - path: /
+#   tls:
+#     - secretName: api-tls
+#       hosts:
+#         - api.royfuwei.dev
+
