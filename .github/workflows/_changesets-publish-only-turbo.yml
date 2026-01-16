@@ -1,0 +1,234 @@
+name: Changesets Publish Turbo (publish only)
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        type: string
+        required: true
+      channel:
+        type: string
+        required: false
+        default: stable  # stable | alpha | beta | rc
+      node_version:
+        type: string
+        required: false
+        default: 20.x
+      build_task:
+        type: string
+        required: false
+        default: build
+      run_tests:
+        type: boolean
+        required: false
+        default: false
+      git_identity_mode:
+        type: string
+        required: false
+        default: actor
+      git_bot_name:
+        type: string
+        required: false
+        default: github-actions[bot]
+      git_bot_email:
+        type: string
+        required: false
+        default: 41898282+github-actions[bot]@users.noreply.github.com
+
+    secrets:
+      GIT_TOKEN:
+        required: true
+      NPM_TOKEN:
+        required: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GIT_TOKEN }}
+          ref: ${{ inputs.ref }}
+
+      - name: Git identity (bot|actor)
+        shell: bash
+        run: |
+          set -euo pipefail
+          MODE="${{ inputs.git_identity_mode }}"
+          case "$MODE" in
+            bot)
+              git config --global user.name "${{ inputs.git_bot_name }}"
+              git config --global user.email "${{ inputs.git_bot_email }}"
+              ;;
+            actor)
+              git config --global user.name "${GITHUB_ACTOR}"
+              git config --global user.email "${GITHUB_ACTOR}@users.noreply.github.com"
+              ;;
+            *)
+              echo "❌ Unsupported git_identity_mode: $MODE"
+              exit 1
+              ;;
+          esac
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node_version }}
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Ensure changesets baseBranch exists (hard)
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE=$(node -p "require('./.changeset/config.json').baseBranch || 'main'")
+          echo "Changesets baseBranch: $BASE"
+          git fetch --no-tags --prune origin "+refs/heads/${BASE}:refs/remotes/origin/${BASE}"
+          git branch -f "$BASE" "refs/remotes/origin/${BASE}"
+          
+          if git rev-parse --verify "$BASE" >/dev/null 2>&1; then
+            echo "✅ Local branch '$BASE' is ready."
+          else
+            echo "❌ baseBranch '$BASE' not found"
+            exit 1
+          fi
+
+      # ✅ 核心改動：改用 Git Diff 判斷版本變更，解決 alpha 被跳過的問題
+      - name: Compute release plan (Diff Mode)
+        id: plan
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE=$(node -p "require('./.changeset/config.json').baseBranch || 'main'")
+          
+          echo "Comparing current ref (${{ inputs.ref }}) with $BASE"
+          
+          # 找出 package.json 有被更動過的目錄
+          CHANGED_DIRS=$(git diff --name-only origin/$BASE...HEAD | grep 'package.json' | xargs -I {} dirname {} | sort -u || echo "")
+          
+          HAS_RELEASES=false
+          TEST_FILTERS=""
+          BUILD_FILTERS=""
+          
+          for dir in $CHANGED_DIRS; do
+            if [ -f "$dir/package.json" ]; then
+              PKG_NAME=$(node -p "require('./$dir/package.json').name" 2>/dev/null || echo "")
+              # 排除掉 root 或是無效的名稱
+              if [ -n "$PKG_NAME" ] && [ "$PKG_NAME" != "undefined" ]; then
+                echo "Found changed package: $PKG_NAME"
+                HAS_RELEASES=true
+                TEST_FILTERS="$TEST_FILTERS --filter=$PKG_NAME"
+                BUILD_FILTERS="$BUILD_FILTERS --filter=$PKG_NAME..."
+              fi
+            fi
+          done
+          
+          echo "has_releases=$HAS_RELEASES" >> "$GITHUB_OUTPUT"
+          echo "turbo_test_filters=$TEST_FILTERS" >> "$GITHUB_OUTPUT"
+          echo "turbo_build_filters=$BUILD_FILTERS" >> "$GITHUB_OUTPUT"
+          
+          echo "== Summary =="
+          echo "Has Releases: $HAS_RELEASES"
+          echo "Build Filters: $BUILD_FILTERS"
+
+      - name: Test (turbo only released packages)
+        if: steps.plan.outputs.has_releases == 'true' && inputs.run_tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm turbo run test ${{ steps.plan.outputs.turbo_test_filters }} --continue
+
+      - name: Build (turbo released packages + deps)
+        if: steps.plan.outputs.has_releases == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm turbo run ${{ inputs.build_task }} ${{ steps.plan.outputs.turbo_build_filters }}
+
+      - name: Publish to npm (changesets)
+        if: steps.plan.outputs.has_releases == 'true'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          CHANNEL="${{ inputs.channel }}"
+          echo "Requested channel: $CHANNEL"
+
+          # 檢查是否在 Pre-mode (存在 pre.json)
+          if [ -f ".changeset/pre.json" ]; then
+            PRE_TAG=$(node -p "require('./.changeset/pre.json').tag")
+            echo "🦋 Changesets is in PRE-MODE (tag: $PRE_TAG)"
+            
+            # 在 Pre-mode 下，不允許使用 --tag 參數，它會自動使用 pre.json 裡的 tag
+            npx changeset publish
+          else
+            echo "🦋 Changesets is in STABLE-MODE"
+            if [ "$CHANNEL" = "stable" ]; then
+              npx changeset publish
+            else
+              # 非 Pre-mode 但指定了 channel (例如手動指定發佈到某 tag)
+              npx changeset publish --tag "$CHANNEL"
+            fi
+          fi
+
+      - name: Tag workspace package versions
+        if: steps.plan.outputs.has_releases == 'true' && success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --tags origin
+
+          pnpm -r --silent exec node -e "
+            const fs = require('fs');
+            const p = JSON.parse(fs.readFileSync('package.json','utf8'));
+            if (p.name && p.version) console.log(p.name + ' ' + p.version);
+          " | while read -r name version; do
+            safe=$(echo "$name" | sed 's/^@//' | sed 's#/#__#g')
+            tag="pkg/${safe}/v${version}"
+            if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
+              echo "skip existing tag: ${tag}"
+              continue
+            fi
+            echo "create tag: ${tag}"
+            git tag "${tag}"
+          done
+
+          git push origin --tags
+
+      - name: Open PR back to target branch
+        env:
+          GH_TOKEN: ${{ secrets.GIT_TOKEN }}
+        shell: bash
+        run: |
+          FROM="${{ inputs.ref }}"
+          TO="${{ inputs.target_branch }}"
+          
+          # 如果當前分支跟目標分支一樣，就不需要 PR
+          if [ "$FROM" = "$TO" ]; then
+            echo "Already on $TO, skipping PR."
+            exit 0
+          fi
+
+          TITLE="chore(release): sync $FROM to $TO after publish"
+          BODY="This automated PR syncs the latest versions and changelogs from **$FROM** to **$TO** after a successful NPM publish."
+          
+          if gh pr list --base "$TO" --head "$FROM" --state open --json number -q 'length' | grep -q '^0$'; then
+            gh pr create --base "$TO" --head "$FROM" --title "$TITLE" --body "$BODY"
+          else
+            echo "PR already exists."
+          fi
