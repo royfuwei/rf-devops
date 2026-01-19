@@ -1,0 +1,10 @@
+.echo:
+  script:
+    - echo $GEV_DOCKER_IMAGE_DEVOPS
+    - echo $CI_COMMIT_SHA
+    - echo $CI_PROJECT_NAME
+    - echo $CI_PROJECT_ROOT_NAMESPACE
+    - echo $CI_PROJECT_NAMESPACE
+    - echo $CI_PROJECT_PATH
+    - echo $CI_COMMIT_REF_NAME
+    - echo $CI_COMMIT_SHA

@@ -1,0 +1,64 @@
+# rf-devops:/.gitlab14/docker/detect-and-build.yml
+
+.detect_apps_base:
+  image: alpine/git:latest
+  before_script:
+    - apk add --no-cache jq  # Alpine 預設沒 jq，需手動安裝
+  script:
+    - |
+      set -euo pipefail
+      git config --global --add safe.directory "$CI_PROJECT_DIR"
+      
+      echo "--- Generating Dynamic Pipeline ---"
+      
+      # 1. 決定比對範圍
+      # 如果是第一次在該分支 push，$CI_COMMIT_BEFORE_SHA 會是全零
+      if [ "$CI_COMMIT_BEFORE_SHA" == "0000000000000000000000000000000000000000" ]; then
+        echo "New branch detected, comparing against main..."
+        git fetch origin main
+        DIFF_RANGE="origin/main...$CI_COMMIT_SHA"
+      else
+        echo "Comparing against previous push ($CI_COMMIT_BEFORE_SHA)..."
+        DIFF_RANGE="$CI_COMMIT_BEFORE_SHA...$CI_COMMIT_SHA"
+      fi
+      
+      # 2. 執行比對
+      CHANGED_APPS=$(git diff --name-only $DIFF_RANGE | grep '^apps/.*package.json$' || true)
+      
+      echo "Changed apps identified: $CHANGED_APPS"
+
+      # 3. 產出 YAML 
+      echo "stages: [build]" > dynamic-apps-pipeline.yml
+      echo "include: [{ project: 'roy.chuang/turbo-devops', ref: '$DEVOPS_REF', file: '/gitlab-ci/docker/docker-build-reusable.yml' }]" >> dynamic-apps-pipeline.yml
+
+      if [ -z "$CHANGED_APPS" ]; then
+        echo "no_op: { stage: build, script: 'echo No apps changed' }" >> dynamic-apps-pipeline.yml
+      else
+        for file in $CHANGED_APPS; do
+          DIR=$(dirname "$file")
+          APP_ID=$(basename "$DIR")
+          IMAGE_NAME=$(jq -r '.name' "$DIR/package.json" | sed 's|@||g; s|/|-|g')
+          
+          cat <<EOF >> dynamic-apps-pipeline.yml
+      build-$APP_ID:
+        stage: build
+        extends: .docker_build_template
+        variables:
+          APP_ID: "$APP_ID"
+          IMAGE_NAME: "$IMAGE_NAME"
+          HARBOR_PROJECT: "$HARBOR_PROJECT"
+          HARBOR_HOST: "$HARBOR_HOST"
+          # 暫時移除對 USERNAME 和 TOKEN 的變數引用
+      EOF
+        done
+      fi
+  artifacts:
+    paths:
+      - dynamic-apps-pipeline.yml
+
+.trigger_apps_base:
+  trigger:
+    include:
+      - artifact: dynamic-apps-pipeline.yml
+        job: detect_apps
+    strategy: depend

@@ -1,0 +1,13 @@
+spec:
+  inputs:
+    app:
+      default: api
+    image:
+      required: true
+
+---
+
+.echo_input:
+  script:
+    - echo "build app=$[[ inputs.app ]]"
+    - echo "image=$[[ inputs.image ]]"

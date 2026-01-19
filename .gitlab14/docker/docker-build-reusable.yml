@@ -1,0 +1,37 @@
+# rf-devops:/.gitlab14/docker/docker-build-reusable.yml
+
+.docker_build_template:
+  image: docker:24.0.7
+  before_script:
+    - apk add --no-cache jq  # Alpine 預設沒 jq，需手動安裝
+  variables:
+    DOCKER_CONTEXT: "."
+    DOCKERFILE_PATH: "apps/$APP_ID/Dockerfile"
+    REGISTRY_BASE: "$HARBOR_HOST/$HARBOR_PROJECT"
+  script:
+    - |
+      set -euo pipefail
+      
+      # 獲取 package 資訊
+      APP_PATH="apps/$APP_ID"
+      # --- 改用 jq 解析 JSON ---
+      SCOPE=$(jq -r '.name' "$APP_PATH/package.json")
+      VERSION=$(jq -r '.version' "$APP_PATH/package.json")
+      
+      IMAGE_TAG="$REGISTRY_BASE/$IMAGE_NAME:$VERSION"
+      LATEST_TAG="$REGISTRY_BASE/$IMAGE_NAME:latest"
+
+      echo "Building $SCOPE (Version: $VERSION)..."
+
+      # 如果不需要 login，直接 build
+      docker build \
+        --no-cache \
+        --build-arg TURBO_SCOPE="$SCOPE" \
+        --build-arg TURBO_APP_PATH="$APP_PATH" \
+        -f "$DOCKERFILE_PATH" \
+        -t "$IMAGE_TAG" \
+        -t "$LATEST_TAG" "$DOCKER_CONTEXT"
+
+      echo "Pushing to Harbor..."
+      docker push "$IMAGE_TAG"
+      docker push "$LATEST_TAG"

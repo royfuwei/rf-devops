@@ -1,0 +1,12 @@
+
+.docker_build:
+  script:
+    - ls -la
+    - echo "APP=$APP"
+    - echo "IMAGE=$IMAGE"
+    - |
+      docker build \
+        --no-cache \
+        --secret id=npmrc,src=./.npmrc \
+        -f "./apps/$APP/Dockerfile" \
+        -t "$IMAGE" .

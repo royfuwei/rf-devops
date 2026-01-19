@@ -1,0 +1,72 @@
+# rf-devops:/.gitlab14/docker/detect-and-build-deploy.yml
+
+.detect_apps_base:
+  image: alpine/git:latest
+  before_script:
+    - apk add --no-cache jq  # Alpine 預設沒 jq，需手動安裝
+  script:
+    - |
+      set -euo pipefail
+      git config --global --add safe.directory "$CI_PROJECT_DIR"
+      
+      echo "--- Generating Dynamic Pipeline ---"
+      git fetch origin "$BASE_BRANCH"
+      
+      # 找出 apps 下有變動的 package.json
+      CHANGED_APPS=$(git diff --name-only origin/"$BASE_BRANCH"...HEAD | grep '^apps/.*package.json$' || echo "")
+      
+      # 初始化動態 Pipeline
+      echo "stages: [build, deploy]" > dynamic-apps-pipeline.yml
+      echo "include: [" >> dynamic-apps-pipeline.yml
+      echo "  { project: 'roy.chuang/turbo-devops', ref: '$DEVOPS_REF', file: '/gitlab-ci/docker/docker-build-reusable.yml' }," >> dynamic-apps-pipeline.yml
+      echo "  { project: 'roy.chuang/turbo-devops', ref: '$DEVOPS_REF', file: '/gitlab-ci/k8s/helm-deploy-reusable.yml' }" >> dynamic-apps-pipeline.yml
+      echo "]" >> dynamic-apps-pipeline.yml
+
+      if [ -z "$CHANGED_APPS" ]; then
+        echo "no_op: { stage: build, script: 'echo No apps changed' }" >> dynamic-apps-pipeline.yml
+      else
+        APPS_MATRIX="[]"
+        for file in $CHANGED_APPS; do
+          DIR=$(dirname "$file")
+          APP_ID=$(basename "$DIR")
+          VERSION=$(jq -r '.version' "$file")
+          IMAGE_NAME=$(jq -r '.name' "$file" | sed 's|@||g; s|/|-|g')
+          
+          # 建立矩陣 JSON 用於部署
+          APPS_MATRIX=$(echo $APPS_MATRIX | jq -c ". += [{\"id\": \"$APP_ID\", \"version\": \"$VERSION\"}]")
+          
+          # 生成 Build Job
+          cat <<EOF >> dynamic-apps-pipeline.yml
+      build-$APP_ID:
+        stage: build
+        extends: .docker_build_template
+        variables:
+          APP_ID: "$APP_ID"
+          IMAGE_NAME: "$IMAGE_NAME"
+          HARBOR_PROJECT: "$HARBOR_PROJECT"
+          HARBOR_HOST: "$HARBOR_HOST"
+      EOF
+        done
+
+        # 生成單一 Deploy Job (傳入整個矩陣)
+        cat <<EOF >> dynamic-apps-pipeline.yml
+      deploy-to-k8s:
+        stage: deploy
+        extends: .helm_deploy_template
+        variables:
+          APPS_JSON: '$APPS_MATRIX'
+          NAMESPACE: "$DEPLOY_NAMESPACE"
+          ENV_NAME: "$DEPLOY_ENV"
+          GIT_TOKEN: "$GIT_TOKEN"
+      EOF
+      fi
+  artifacts:
+    paths:
+      - dynamic-apps-pipeline.yml
+
+.trigger_apps_base:
+  trigger:
+    include:
+      - artifact: dynamic-apps-pipeline.yml
+        job: detect_apps
+    strategy: depend
