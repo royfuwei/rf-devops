@@ -1,0 +1,92 @@
+.changesets_version_channel:
+  image: node:22
+
+  variables:
+    GIT_STRATEGY: fetch
+    GIT_DEPTH: "0"
+    GIT_TERMINAL_PROMPT: "0"
+    PNPM_STORE_PATH: ".pnpm-store"
+    # 預設：有 token 就會 push；你也可以在 job 覆寫 PUSH_VERSION=false 強制不 push
+    PUSH_VERSION: "auto"
+
+  cache:
+    key: "pnpm-${CI_PROJECT_ID}"
+    paths:
+      - .pnpm-store/
+
+  before_script:
+    - set -euo pipefail
+    - corepack enable
+    - node -v
+    - npm -v
+
+  script:
+    - |
+      set -euo pipefail
+
+      REF="${REF:-$CI_COMMIT_BRANCH}"
+      if [ -z "${CHANNEL:-}" ]; then
+        CHANNEL="${CI_COMMIT_BRANCH#release/}"
+      fi
+
+      # --- 判斷是否要 push ---
+      SHOULD_PUSH="false"
+      case "${PUSH_VERSION:-auto}" in
+        true)
+          [ -z "${GIT_TOKEN:-}" ] && { echo "ERROR: GIT_TOKEN is missing"; exit 1; }
+          SHOULD_PUSH="true" ;;
+        false)
+          SHOULD_PUSH="false" ;;
+        auto|*)
+          [ -n "${GIT_TOKEN:-}" ] && SHOULD_PUSH="true" || SHOULD_PUSH="false" ;;
+      esac
+
+      echo "Target REF: $REF, Channel: $CHANNEL, Should Push: $SHOULD_PUSH"
+
+      # --- git identity ---
+      git config user.email "${GIT_USER_EMAIL:-ci@local}"
+      git config user.name  "${GIT_USER_NAME:-gitlab-ci}"
+
+      # --- checkout ---
+      git fetch origin "$REF"
+      git checkout -B "$REF" "origin/$REF"
+
+      # --- pnpm install ---
+      pnpm install --frozen-lockfile
+
+      # --- changesets pre-mode ---
+      if [ "$CHANNEL" = "stable" ]; then
+        pnpm changeset pre exit || true
+      else
+        pnpm changeset pre enter "$CHANNEL" || true
+      fi
+
+      # --- version ---
+      # 1. 執行版本更新 2. 同步更新 lockfile
+      echo "Versioning packages..."
+      HUSKY=0 pnpm changeset version
+      HUSKY=0 pnpm install --no-frozen-lockfile
+
+      # --- 檢查變動 ---
+      if git diff --quiet; then
+        echo "No changes after versioning."
+        exit 0
+      fi
+
+      # --- 執行提交與推送 ---
+      if [ "$SHOULD_PUSH" = "true" ]; then
+        echo "Committing and pushing changes..."
+        git add -A
+        # 使用 --no-verify 確保完全跳過 husky
+        git commit -m "chore(release): version ($CHANNEL) [skip ci]" --no-verify
+        
+        # 使用 Token 推送
+        git remote set-url origin "https://oauth2:${GIT_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git"
+        git push origin "HEAD:$REF"
+        
+        # 清理 Token 資訊 (安全性考量)
+        git remote set-url origin "https://${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git"
+      else
+        echo "Dry-run mode: Printing diff summary"
+        git diff --stat
+      fi
