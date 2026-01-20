@@ -12,7 +12,7 @@ deployments:
       targetCPUUtilizationPercentage: 80
       # targetMemoryUtilizationPercentage: 80
     image:
-      repository: harbor.royfuwei.dev/royfuwei/rfjs-nx-api
+      repository: harbor.infra.royfw.dev/royfw/rfjs-nx-api
       pullPolicy: Always
       # pullPolicy: IfNotPresent
       # Overrides the image tag whose default is the chart appVersion.
@@ -66,7 +66,7 @@ deployments:
       targetCPUUtilizationPercentage: 80
       # targetMemoryUtilizationPercentage: 80
     image:
-      repository: harbor.royfuwei.dev/royfuwei/rfjs-nx-gql
+      repository: harbor.infra.royfw.dev/royfw/rfjs-nx-gql
       pullPolicy: Always
       # pullPolicy: IfNotPresent
       # Overrides the image tag whose default is the chart appVersion.
@@ -120,7 +120,7 @@ deployments:
       targetCPUUtilizationPercentage: 80
       # targetMemoryUtilizationPercentage: 80
     image:
-      repository: harbor.royfuwei.dev/royfuwei/rfjs-nx-web
+      repository: harbor.infra.royfw.dev/royfw/rfjs-nx-web
       pullPolicy: Always
       tag: "latest"
     service:
@@ -155,25 +155,25 @@ ingress:
     nginx.ingress.kubernetes.io/force-ssl-redirect: "false"   # ✅ 新增這行
     cert-manager.io/cluster-issuer: letsencrypt-dns # 關閉自建 certificate 改用 cert-manager
   hosts:
-    - host: rfjs-nx.api.royfuwei.dev
+    - host: rfjs-nx.api.royfw.dev
       paths:
         - path: /
           pathType: Prefix
           serviceName: rfjs-nx-api
           servicePort: 8001
-    - host: rfjs-nx.test2.royfuwei.dev
+    - host: rfjs-nx.test2.royfw.dev
       paths:
         - path: /
           pathType: Prefix
           serviceName: rfjs-nx-api
           servicePort: 8001
-    - host: rfjs-nx.gql.royfuwei.dev
+    - host: rfjs-nx.gql.royfw.dev
       paths:
         - path: /
           pathType: Prefix
           serviceName: rfjs-nx-gql
           servicePort: 8002
-    - host: rfjs-nx.web.royfuwei.dev
+    - host: rfjs-nx.web.royfw.dev
       paths:
         - path: /
           pathType: Prefix

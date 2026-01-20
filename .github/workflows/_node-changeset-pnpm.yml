@@ -42,8 +42,8 @@ jobs:
       - name: Install dependencies
         run: |
           export CI=true
-          git config --global user.email "royfuwei@gmail.com"
-          git config --global user.name "royfuwei"
+          git config --global user.email "royfw.me@gmail.com"
+          git config --global user.name "royfw"
           pnpm -v
           pnpm install --frozen-lockfile
       

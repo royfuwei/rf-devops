@@ -11,7 +11,7 @@ on:
         default: 0.0.1
       environment:
         type: string
-        default: k8s-royfuwei
+        default: k8s-royfw
       namespace:
         type: string
         default: rfjs-nx
@@ -50,7 +50,7 @@ jobs:
     uses: ./.github/workflows/_release-docker.yml
     with:
       projectName: rfjs-nx-api
-      projectSource: royfuwei
+      projectSource: royfw
       version: ${{ inputs.appVersion }}
       buildPath: apps/api/Dockerfile
       environment: ${{ inputs.environment }}
@@ -65,7 +65,7 @@ jobs:
     uses: ./.github/workflows/_release-docker.yml
     with:
       projectName: rfjs-nx-gql
-      projectSource: royfuwei
+      projectSource: royfw
       version: ${{ inputs.appVersion }}
       buildPath: apps/gql/Dockerfile
       environment: ${{ inputs.environment }}
@@ -80,7 +80,7 @@ jobs:
     uses: ./.github/workflows/_release-docker.yml
     with:
       projectName: rfjs-nx-web
-      projectSource: royfuwei
+      projectSource: royfw
       version: ${{ inputs.appVersion }}
       buildPath: apps/web/Dockerfile
       environment: ${{ inputs.environment }}
@@ -96,7 +96,7 @@ jobs:
     uses: ./.github/workflows/_release-helm.yml
     with:
       projectName: rfjs-nx
-      projectSource: royfuwei
+      projectSource: royfw
       appVersion: ${{ inputs.appVersion }}
       helmVersion: ${{ inputs.helmVersion }}
       environment: ${{ inputs.environment }}
@@ -115,7 +115,7 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
-          repository: royfuwei/rf-devops
+          repository: royfw/rf-devops
           fetch-depth: 0
           token: ${{ secrets.GIT_TOKEN }}
 
@@ -123,12 +123,12 @@ jobs:
         uses: WyriHaximus/github-action-helm3@v3
         env:
           PROJECT_NAME: rfjs-nx
-          PROJECT_SOURCE: royfuwei
+          PROJECT_SOURCE: royfw
           KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG }}
           HARBOR_HOST: ${{ secrets.HARBOR_HOST }}
           HARBOR_USERNAME: ${{ secrets.HARBOR_USERNAME }}
           HARBOR_TOKEN: ${{ secrets.HARBOR_TOKEN }}
-          HARBOR_EMAIL: royfuwei@gmail.com
+          HARBOR_EMAIL: royfw.me@gmail.com
           NAMESPACE: ${{ inputs.namespace }}
           ENV_DB_MONGO_URI: ${{ secrets.ENV_DB_MONGO_URI }}
           ENV_PUBLIC_SUPABASE_URL: ${{ secrets.ENV_PUBLIC_SUPABASE_URL }}

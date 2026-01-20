@@ -48,7 +48,7 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
-          repository: royfuwei/rf-devops
+          repository: royfw/rf-devops
           fetch-depth: 0
           token: ${{ secrets.envPAT }}
 
@@ -59,7 +59,7 @@ jobs:
           HARBOR_HOST: ${{ secrets.HARBOR_HOST }}
           HARBOR_USERNAME: ${{ secrets.HARBOR_USERNAME }}
           HARBOR_TOKEN: ${{ secrets.HARBOR_TOKEN }}
-          HARBOR_EMAIL: royfuwei@gmail.com
+          HARBOR_EMAIL: royfw.me@gmail.com
           ENV_DB_MONGO_URI: ${{ secrets.ENV_DB_MONGO_URI }}
           ENV_PUBLIC_SUPABASE_URL: ${{ secrets.ENV_PUBLIC_SUPABASE_URL }}
           ENV_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.ENV_PUBLIC_SUPABASE_ANON_KEY }}

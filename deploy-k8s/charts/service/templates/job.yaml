@@ -1,0 +1,49 @@
+{{- if eq .Values.kind "Job" -}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  # 加上 Revision 確保每次部署都是新的 Job 實體
+  name: {{ include "service.fullname" . }}-{{ .Release.Revision }}
+  labels:
+    # ✅ 加入這個 Label，方便 deploy-service.sh 用 selector 抓取狀態
+    app.kubernetes.io/name: {{ include "service.fullname" . }}
+spec:
+  # ✅ 設定完成後 300 秒自動刪除 Job (可視需求調整)
+  ttlSecondsAfterFinished: 300
+  # Job 失敗後的重試次數
+  backoffLimit: {{ .Values.jobBackoffLimit | default 4 }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "service.fullname" . }}
+    spec:
+      restartPolicy: OnFailure
+      {{- if .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml .Values.imagePullSecrets | nindent 8 }}
+      {{- else }}
+      # 如果想相容目前的腳本，且不想改 values.yaml，可以用這個邏輯：
+      # imagePullSecrets:
+      #   - name: harbor-registry-secret
+      {{- end }}
+      containers:
+        - name: {{ include "service.fullname" . }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          {{- if .Values.image.pullPolicy }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- end }}
+          env:
+            {{- range $k, $v := .Values.env }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
+            {{- end }}
+          {{- if and .Values.secrets.existingSecretName .Values.secrets.useEnvFrom }}
+          envFrom:
+            - secretRef:
+                name: {{ .Values.secrets.existingSecretName }}
+          {{- end }}
+          {{- if .Values.resources }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          {{- end }}
+{{- end }}

@@ -36,8 +36,8 @@ jobs:
       - name: Initialization
         id: init
         run: |
-          git config --global user.email royfuwei@gmail.com
-          git config --global user.name royfuwei
+          git config --global user.email royfw.me@gmail.com
+          git config --global user.name royfw
 
       - name: Update Version
         run: |
@@ -79,8 +79,8 @@ jobs:
       - name: Initialization
         id: init
         run: |
-          git config --global user.email royfuwei@gmail.com
-          git config --global user.name royfuwei
+          git config --global user.email royfw.me@gmail.com
+          git config --global user.name royfw
           git checkout production
           git pull
           npm ci

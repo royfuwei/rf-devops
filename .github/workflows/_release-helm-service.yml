@@ -16,7 +16,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          repository: royfuwei/rf-devops
+          repository: royfw/rf-devops
           token: ${{ secrets.GIT_TOKEN }} # ✅ 現在可以正確讀取了
           
       - name: Install Helm
@@ -30,8 +30,8 @@ jobs:
       - name: Package and Push
         run: |
           # 這裡的路徑現在相對於 rf-devops 根目錄是正確的
-          CHART_PATH="rfjs/charts/service"
+          CHART_PATH="deploy-k8s/charts/service"
           DYNAMIC_VERSION="${{ inputs.app_version }}"
           
           helm package $CHART_PATH --version "$DYNAMIC_VERSION" --app-version "$DYNAMIC_VERSION"
-          helm push rfjs-service-${DYNAMIC_VERSION}.tgz oci://${{ secrets.HARBOR_HOST }}/royfuwei/charts
+          helm push rfjs-service-${DYNAMIC_VERSION}.tgz oci://${{ secrets.HARBOR_HOST }}/royfw/charts

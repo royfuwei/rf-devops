@@ -6,10 +6,13 @@ set -euo pipefail
 : "${IMAGE_REPO:?missing IMAGE_REPO}"
 : "${IMAGE_TAG:?missing IMAGE_TAG}"
 : "${CHART_SOURCE:?missing CHART_SOURCE}"
-: "${NAMESPACE:=rfjs}"
-: "${ENV_NAME:=k8s-royfw}"
+: "${NAMESPACE:=test}"
+: "${ENV_NAME:=NewK8s}"
 
-ENV_FILE="rfjs/env/${ENV_NAME}/${SERVICE_NAME}.yaml"
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+DEPLOY_K8S_ROOT="$(dirname "$SCRIPT_DIR")"
+
+ENV_FILE="${DEPLOY_K8S_ROOT}/env/${ENV_NAME}/${SERVICE_NAME}.yaml"
 if [[ ! -f "$ENV_FILE" ]]; then
   echo "❌ values file not found: $ENV_FILE"
   exit 1

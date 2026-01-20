@@ -12,7 +12,7 @@ deployments:
       targetCPUUtilizationPercentage: 80
       # targetMemoryUtilizationPercentage: 80
     image:
-      repository: harbor.royfuwei.dev/weavcraft/api
+      repository: harbor.infra.royfw.dev/weavcraft/api
       pullPolicy: Always
       # pullPolicy: IfNotPresent
       # Overrides the image tag whose default is the chart appVersion.
@@ -63,7 +63,7 @@ deployments:
   #     targetCPUUtilizationPercentage: 80
   #     # targetMemoryUtilizationPercentage: 80
   #   image:
-  #     repository: harbor.royfuwei.dev/weavcraft/web
+  #     repository: harbor.infra.royfw.dev/weavcraft/web
   #     pullPolicy: Always
   #     tag: "latest"
   #   service:

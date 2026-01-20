@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       ref: { type: string, required: true }
-      environment: { type: string, default: k8s-royfuwei }
+      environment: { type: string, default: k8s-royfw }
       namespace: { type: string, default: rfjs }
     secrets:
       GIT_TOKEN: { required: true }
@@ -60,8 +60,8 @@ jobs:
         app: ${{ fromJson(needs.detect.outputs.apps_matrix) }}
     uses: ./.github/workflows/_release-turbo-docker.yml
     with:
-      projectName: rfjs-${{ matrix.app.id }}
-      projectSource: royfuwei
+      projectName: rfjs/${{ matrix.app.id }}
+      projectSource: royfw
       version: ${{ matrix.app.version }}
       buildPath: ./${{ matrix.app.path }}/Dockerfile
       environment: ${{ inputs.environment }}
@@ -96,7 +96,7 @@ jobs:
       - name: Checkout DevOps Tools
         uses: actions/checkout@v4
         with:
-          repository: royfuwei/rf-devops
+          repository: royfw/rf-devops
           token: ${{ secrets.GIT_TOKEN }}
       - name: Deploy via Helm
         uses: WyriHaximus/github-action-helm3@v3
@@ -106,13 +106,14 @@ jobs:
           HARBOR_USERNAME: ${{ secrets.HARBOR_USERNAME }}
           HARBOR_TOKEN: ${{ secrets.HARBOR_TOKEN }}
           # ✅ 開啟 OCI 模式，指向量產型 Repo
-          CHART_OCI_REPO: "oci://${{ secrets.HARBOR_HOST }}/royfuwei/charts/rfjs-service"
+          CHART_OCI_REPO: "oci://${{ secrets.HARBOR_HOST }}/royfw/charts/rfjs"
           DATABASE_URL: ${{ secrets.ENV_DATABASE_URL }}
           APP_NAME: ${{ secrets.ENV_API_APP_NAME }}
+          HARBOR_PROJECT: "rfjs"
         with:
           kubeconfig: '${{ secrets.KUBE_CONFIG }}'
           exec: |
-            bash ./rfjs/deploy-granular.sh \
+            bash ./deploy-k8s/deploy-granular.sh \
               '${{ needs.detect.outputs.apps_matrix }}' \
               '${{ inputs.namespace }}' \
               '${{ inputs.environment }}'

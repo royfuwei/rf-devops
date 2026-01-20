@@ -2,20 +2,19 @@
 set -euo pipefail
 
 APPS_JSON="${1:?missing APPS_JSON}"
-export NAMESPACE="${2:-rfjs}"
-export ENV_NAME="${3:-k8s-royfw}"
+export NAMESPACE="${2:-test}"
+export ENV_NAME="${3:-NewK8s}"
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-DEV_OPS_ROOT="$(dirname "$SCRIPT_DIR")"
+cd "$SCRIPT_DIR"
 
 echo "--------------------------------------------------"
 echo "🚀 Granular Deployment Started (OCI Version Sync)"
 echo "--------------------------------------------------"
-
-cd "$DEV_OPS_ROOT"
+echo "Current Directory: $(pwd)" # 增加除錯資訊
 
 for row in $(echo "${APPS_JSON}" | jq -r '.[] | @base64'); do
-    _jq() { echo "${row}" | base64 --decode | jq -r "${1}"; }
+    _jq() { echo "${row}" | base64 -d | jq -r "${1}"; }
     APP_ID=$(_jq '.id')
     APP_VERSION=$(_jq '.version')
 
@@ -24,7 +23,8 @@ for row in $(echo "${APPS_JSON}" | jq -r '.[] | @base64'); do
     # 1. Secrets
     export SERVICE_NAME="$APP_ID"
     export ROOT_DIR="." 
-    bash ./rfjs/scripts/deploy-secret.sh
+    # 確保這裡的路徑在當前目錄下能找到
+    bash ./scripts/deploy-secret.sh
 
     # 2. OCI vs Local 邏輯
     if [[ -n "${CHART_OCI_REPO:-}" ]]; then
@@ -34,14 +34,15 @@ for row in $(echo "${APPS_JSON}" | jq -r '.[] | @base64'); do
         echo "$HARBOR_TOKEN" | helm registry login "$HARBOR_HOST" --username "$HARBOR_USERNAME" --password-stdin > /dev/null 2>&1
     else
         echo "  📂 Mode: Local Chart Deployment"
-        export CHART_SOURCE="./rfjs/charts/service"
+        export CHART_SOURCE="./charts/service"
     fi
 
     # 3. Image
-    export IMAGE_REPO="${HARBOR_HOST}/royfw/rfjs-${APP_ID}"
+    export REGISTRY_BASE="${HARBOR_HOST}/${HARBOR_PROJECT}"
+    export IMAGE_REPO="${REGISTRY_BASE}/${APP_ID}"
     export IMAGE_TAG="$APP_VERSION"
 
-    bash ./rfjs/scripts/deploy-service.sh
+    bash ./scripts/deploy-service.sh
     echo "✅ Finished: $APP_ID"
     echo "--------------------------------------------------"
 done

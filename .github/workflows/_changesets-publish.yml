@@ -42,8 +42,8 @@ jobs:
 
       - name: Git identity
         run: |
-          git config --global user.email "royfuwei@gmail.com"
-          git config --global user.name "royfuwei"
+          git config --global user.email "royfw.me@gmail.com"
+          git config --global user.name "Roy Chuang"
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4

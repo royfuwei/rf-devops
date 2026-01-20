@@ -53,7 +53,7 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v3
         with:
-          repository: royfuwei/rf-devops
+          repository: royfw/rf-devops
           fetch-depth: 0
           token: ${{ secrets.envPAT }}
 
@@ -71,4 +71,4 @@ jobs:
           cat ./helm/values.yaml
           cat ./helm/Chart.yaml
           tar zcvf ${{ inputs.projectName }}.tgz helm
-          helm push ${{ inputs.projectName }}.tgz oci://harbor.royfuwei.dev/${{ inputs.projectSource }}
+          helm push ${{ inputs.projectName }}.tgz oci://harbor.royfw.dev/${{ inputs.projectSource }}

@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-NAMESPACE="${NAMESPACE:-default}"
-ENV_NAME="${ENV_NAME:-k8s-royfw}"          # 對應 rfjs/env/<ENV_NAME>/
+NAMESPACE="${NAMESPACE:-test}"
+ENV_NAME="${ENV_NAME:-NewK8s}"          # 對應 env/<ENV_NAME>/
 SERVICE_NAME="${SERVICE_NAME:-}"               # 例如 api
 ROOT_DIR="${ROOT_DIR:-.}"                      # 允許從任意 cwd 執行
+
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+DEPLOY_K8S_ROOT="$(dirname "$SCRIPT_DIR")"
 
 echo "Using namespace: $NAMESPACE"
 echo "Using env: $ENV_NAME"
@@ -20,11 +23,18 @@ fi
 
 apply_docker_registry_secret() {
   local name="$1"
+  
+  # 檢查是否有必要的變數，若缺少則跳過建立 registry secret
+  if [[ -z "${HARBOR_HOST:-}" || -z "${HARBOR_USERNAME:-}" || -z "${HARBOR_TOKEN:-}" ]]; then
+    echo "ℹ️ Missing Harbor credentials, skipping docker-registry secret '$name'..."
+    return 0
+  fi
+
   echo "🔸 Applying docker-registry secret '$name'..."
   kubectl -n "$NAMESPACE" create secret docker-registry "$name" \
-    --docker-server="${HARBOR_HOST:?missing HARBOR_HOST}" \
-    --docker-username="${HARBOR_USERNAME:?missing HARBOR_USERNAME}" \
-    --docker-password="${HARBOR_TOKEN:?missing HARBOR_TOKEN}" \
+    --docker-server="$HARBOR_HOST" \
+    --docker-username="$HARBOR_USERNAME" \
+    --docker-password="$HARBOR_TOKEN" \
     --docker-email="${HARBOR_EMAIL:-}" \
     --dry-run=client -o yaml | kubectl apply -f -
   echo "✅ Secret '$name' applied."
@@ -39,7 +49,7 @@ if [[ -z "$SERVICE_NAME" ]]; then
   exit 0
 fi
 
-ENV_DIR="${ROOT_DIR}/rfjs/env/${ENV_NAME}"
+ENV_DIR="${DEPLOY_K8S_ROOT}/env/${ENV_NAME}"
 KEYS_FILE="${ENV_DIR}/${SERVICE_NAME}.secrets.keys"
 COMMON_KEYS_FILE="${ENV_DIR}/common.secrets.keys"
 

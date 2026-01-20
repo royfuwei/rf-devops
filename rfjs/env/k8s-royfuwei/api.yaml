@@ -32,7 +32,7 @@ ingress:
     cert-manager.io/cluster-issuer: letsencrypt-dns
 
   hosts:
-    - host: rfjs.api.royfuwei.dev
+    - host: rfjs.api.royfw.dev
       paths:
         - path: /
           pathType: Prefix
@@ -41,7 +41,7 @@ ingress:
   tls:
     - secretName: rfjs-tls-secret
       hosts:
-        - rfjs.api.royfuwei.dev
+        - rfjs.api.royfw.dev
 
 # Traefik + cert-manager
 # ingress:
@@ -50,11 +50,11 @@ ingress:
 #   annotations:
 #     cert-manager.io/cluster-issuer: "letsencrypt-prod"
 #   hosts:
-#     - host: api.royfuwei.dev
+#     - host: api.royfw.dev
 #       paths:
 #         - path: /
 #   tls:
 #     - secretName: api-tls
 #       hosts:
-#         - api.royfuwei.dev
+#         - api.royfw.dev
 

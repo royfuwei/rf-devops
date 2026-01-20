@@ -8,7 +8,7 @@ on:
         required: true
       projectSource:
         type: string
-        default: royfuwei
+        default: royfw
       version:
         type: string
         required: true

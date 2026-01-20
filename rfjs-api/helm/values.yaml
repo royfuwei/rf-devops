@@ -5,7 +5,7 @@
 replicaCount: 1
 
 image:
-  repository: harbor.royfuwei.dev/royfuwei/rfjs-api
+  repository: harbor.infra.royfw.dev/royfw/rfjs-api
   pullPolicy: Always
   # pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
