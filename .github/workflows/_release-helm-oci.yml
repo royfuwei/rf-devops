@@ -8,6 +8,7 @@ on:
       chart_repo: { required: true, type: string }     # e.g. royfw/charts/rfjs
       app_id: { required: true, type: string }            # e.g. api
       environment: { required: true, type: string }
+      namespace: { required: true, type: string }
     secrets:
       HARBOR_HOST: { required: true }
       HARBOR_USERNAME: { required: true }
@@ -45,32 +46,56 @@ jobs:
         shell: bash
         env:
           VERSION: ${{ inputs.version }}
-          CHART_PATH: ${{ inputs.chart_path }}
-          CHART_REPO: ${{ inputs.chart_repo }}
-          APP_ID: ${{ inputs.app_id }}
+          CHART_PATH: ${{ inputs.chart_path }}     # 通用模板 e.g. deploy-k8s/charts/service
+          CHART_REPO: ${{ inputs.chart_repo }}     # 倉庫路徑 e.g. royfw/charts/rfjs
+          APP_ID: ${{ inputs.app_id }}             # 應用名稱 e.g. api
+          PROJECT_ENV: ${{ inputs.environment }}   # 環境 e.g. k8s-royfw
+          PROJECT_ROOT: ${{ inputs.namespace }}    # 專案 e.g. rfjs
         run: |
           set -euo pipefail
           
-          # ✅ 取得 APP_ID (從 chart_repo 的最後一段取得，例如 api)
-          CHART_NAME=$(basename "$APP_ID")
-          echo "🏷️ Dynamic Chart Name: $CHART_NAME"
+          # 1. 定義路徑變數
+          CHART_NAME="$APP_ID"
+          ENV_HELM_DIR="./${PROJECT_ROOT}/env/${PROJECT_ENV}/helm"
+          APP_SPECIFIC_VALUES="${ENV_HELM_DIR}/${APP_ID}.yaml"
           
-          # ✅ 修改 Chart.yaml 的 name 屬性，讓 K8s 辨識度更高
-          # 這裡使用備份副檔名 .bak 以確保 sed 在不同環境的相容性
+          echo "🛠️ 正在為 $CHART_NAME 準備環境專屬 Chart (環境: $PROJECT_ENV)"
+
+          # 2. 處理 Chart.yaml (環境共用配置)
+          # 如果環境目錄下有 Chart.yaml，先覆蓋通用模板
+          if [[ -f "${ENV_HELM_DIR}/Chart.yaml" ]]; then
+            echo "📝 覆蓋環境共用 Chart.yaml: ${ENV_HELM_DIR}/Chart.yaml"
+            cp -f "${ENV_HELM_DIR}/Chart.yaml" "$CHART_PATH/Chart.yaml"
+          fi
+          
+          # 強制修正 Chart name 確保與 APP_ID 一致，這會影響 OCI 最終路徑
           sed -i.bak "s/^name: .*/name: $CHART_NAME/" "$CHART_PATH/Chart.yaml"
 
+          # 3. 處理 values.yaml (層疊覆蓋)
+          # A. 如果環境目錄下有基礎 values.yaml，先套用
+          if [[ -f "${ENV_HELM_DIR}/values.yaml" ]]; then
+            echo "📝 套用環境基礎 values: ${ENV_HELM_DIR}/values.yaml"
+            cp -f "${ENV_HELM_DIR}/values.yaml" "$CHART_PATH/values.yaml"
+          fi
+          
+          # B. 如果有 App 專屬的環境設定檔 (api.yaml)，最後覆蓋作為 OCI 內建預設
+          if [[ -f "$APP_SPECIFIC_VALUES" ]]; then
+            echo "📝 注入 App 專屬設定至 values.yaml: $APP_SPECIFIC_VALUES"
+            cp -f "$APP_SPECIFIC_VALUES" "$CHART_PATH/values.yaml"
+          fi
+
+          # 4. 打包與推送
           OUT_DIR="$(pwd)/.helm-packages"
           mkdir -p "$OUT_DIR"
 
-          # 打包時會使用修改過的 Chart.yaml
           helm package "$CHART_PATH" \
             --version "$VERSION" \
             --app-version "$VERSION" \
             --destination "$OUT_DIR"
 
           PKG="$(ls -1 "$OUT_DIR"/*.tgz | tail -n 1)"
-          echo "🚀 Pushing OCI artifact: $PKG to oci://${HARBOR_HOST_NORMALIZED}/${CHART_REPO}/${APP_ID}"
           
+          echo "🚀 Pushing OCI artifact: $PKG to oci://${HARBOR_HOST_NORMALIZED}/${CHART_REPO}"
           helm push "$PKG" "oci://${HARBOR_HOST_NORMALIZED}/${CHART_REPO}"
 
       - name: Logout Harbor

@@ -88,6 +88,7 @@ jobs:
       # ✅ 關鍵：這裡動態拼接 app.id，達成 oci://.../rfjs/api
       chart_repo: ${{ inputs.chart_repo }}
       environment: ${{ inputs.environment }}
+      namespace: ${{ inputs.namespace }}
     secrets:
       HARBOR_HOST: ${{ secrets.HARBOR_HOST }}
       HARBOR_USERNAME: ${{ secrets.HARBOR_USERNAME }}
