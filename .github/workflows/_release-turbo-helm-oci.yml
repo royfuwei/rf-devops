@@ -5,7 +5,7 @@ on:
     inputs:
       version: { required: true, type: string }
       chart_path: { required: true, type: string }     # e.g. deploy-k8s/charts/service
-      chart_repo: { required: true, type: string }     # e.g. royfw/charts/rfjs
+      chart_repo_base: { required: true, type: string }     # e.g. royfw/charts/rfjs
       app_id: { required: true, type: string }            # e.g. api
       environment: { required: true, type: string }
       namespace: { required: true, type: string }
@@ -47,7 +47,7 @@ jobs:
         env:
           VERSION: ${{ inputs.version }}
           CHART_PATH: ${{ inputs.chart_path }}     # 通用模板 e.g. deploy-k8s/charts/service
-          CHART_REPO: ${{ inputs.chart_repo }}     # 倉庫路徑 e.g. royfw/charts/rfjs
+          CHART_REPO_BASE: ${{ inputs.chart_repo_base }}     # 倉庫路徑 e.g. royfw/charts/rfjs
           APP_ID: ${{ inputs.app_id }}             # 應用名稱 e.g. api
           PROJECT_ENV: ${{ inputs.environment }}   # 環境 e.g. k8s-royfw
           PROJECT_ROOT: ${{ inputs.namespace }}    # 專案 e.g. rfjs
@@ -99,8 +99,8 @@ jobs:
 
           PKG="$(ls -1 "$OUT_DIR"/*.tgz | tail -n 1)"
           
-          echo "🚀 Pushing OCI artifact: $PKG to oci://${HARBOR_HOST_NORMALIZED}/${CHART_REPO}"
-          helm push "$PKG" "oci://${HARBOR_HOST_NORMALIZED}/${CHART_REPO}"
+          echo "🚀 Pushing OCI artifact: $PKG to oci://${HARBOR_HOST_NORMALIZED}/${CHART_REPO_BASE}"
+          helm push "$PKG" "oci://${HARBOR_HOST_NORMALIZED}/${CHART_REPO_BASE}"
 
       - name: Logout Harbor
         if: always()

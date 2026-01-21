@@ -23,10 +23,10 @@ for row in $(echo "${APPS_JSON}" | jq -r '.[] | @base64'); do
     export ROOT_DIR="." 
     
     # 2. 決定 Chart 來源 (OCI vs Local)
-    if [[ -n "${CHART_OCI_REPO:-}" ]]; then
+    if [[ -n "${CHART_REPO_BASE:-}" ]]; then
         echo "  📡 Mode: OCI Deployment"
         # ✅ 修正：直接在這裡拼接完整的 OCI Path
-        export CHART_SOURCE="oci://${HARBOR_HOST}/${CHART_OCI_REPO}/${APP_ID}"
+        export CHART_SOURCE="oci://${HARBOR_HOST}/${CHART_REPO_BASE}/${APP_ID}"
         export CHART_VERSION="${APP_VERSION}"
         
         # 登入一次即可，或在循環外登入以增進效率
@@ -41,8 +41,8 @@ for row in $(echo "${APPS_JSON}" | jq -r '.[] | @base64'); do
     bash ./scripts/deploy-secret.sh
 
     # 4. 處理 Image 路徑
-    export REGISTRY_BASE="${HARBOR_HOST}/${HARBOR_PROJECT}"
-    export IMAGE_REPO="${REGISTRY_BASE}/${APP_ID}"
+    export REGISTRY_BASE="${HARBOR_HOST}/${IMAGE_REPO_BASE}"
+    export IMAGE_REPO="${REGISTRY_BASE}/${NAMESPACE}/${APP_ID}"
     export IMAGE_TAG="$APP_VERSION"
 
     bash ./scripts/deploy-service.sh

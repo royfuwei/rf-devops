@@ -3,10 +3,10 @@ name: Reusable Turbo Docker Build
 on:
   workflow_call:
     inputs:
-      projectName:
+      image_repo:
         type: string
         required: true
-      projectSource:
+      image_repo_base:
         type: string
         default: royfw
       version:
@@ -64,8 +64,8 @@ jobs:
           file: ${{ inputs.buildPath }}
           push: true
           tags: |
-            ${{ secrets.HARBOR_HOST }}/${{ inputs.projectSource }}/${{ inputs.projectName }}:${{ inputs.version }}
-            ${{ secrets.HARBOR_HOST }}/${{ inputs.projectSource }}/${{ inputs.projectName }}:latest
+            ${{ secrets.HARBOR_HOST }}/${{ inputs.image_repo_base }}/${{ inputs.image_repo }}:${{ inputs.version }}
+            ${{ secrets.HARBOR_HOST }}/${{ inputs.image_repo_base }}/${{ inputs.image_repo }}:latest
           build-args: |
             TURBO_SCOPE=${{ steps.meta.outputs.scope }}
             TURBO_APP_PATH=${{ steps.meta.outputs.app_path }}

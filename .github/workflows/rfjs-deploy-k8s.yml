@@ -6,8 +6,8 @@ on:
       ref: { type: string, required: true }
       environment: { type: string, default: k8s-royfw }
       namespace: { type: string, default: rfjs }
-      registry_project: { type: string, default: "royfw/rfjs" } # A 選項：控制 Harbor project (royfw vs rfjs)
-      chart_repo: { type: string, default: "royfw/charts/rfjs" }
+      image_repo_base: { type: string, default: "royfw" } # A 選項：控制 Harbor project (royfw vs rfjs)
+      chart_repo_base: { type: string, default: "royfw/charts/rfjs" }
     secrets:
       GIT_TOKEN: { required: true }
       KUBE_CONFIG: { required: true }
@@ -62,8 +62,8 @@ jobs:
         app: ${{ fromJson(needs.detect.outputs.apps_matrix) }}
     uses: ./.github/workflows/_release-turbo-docker.yml
     with:
-      projectName: ${{ inputs.namespace }}/${{ matrix.app.id }} # 例如 rfjs/api
-      projectSource: ${{ inputs.registry_project }}           # 例如 royfw
+      image_repo: ${{ inputs.namespace }}/${{ matrix.app.id }} # 例如 rfjs/api
+      image_repo_base: ${{ inputs.image_repo_base }}           # 例如 royfw
       version: ${{ matrix.app.version }}
       buildPath: ./${{ matrix.app.path }}/Dockerfile
       environment: ${{ inputs.environment }}
@@ -80,13 +80,13 @@ jobs:
     strategy:
       matrix:
         app: ${{ fromJson(needs.detect.outputs.apps_matrix) }}
-    uses: ./.github/workflows/_release-helm-oci.yml
+    uses: ./.github/workflows/_release-turbo-helm-oci.yml
     with:
       version: ${{ matrix.app.version }}
       app_id: ${{ matrix.app.id }}
       chart_path: deploy-k8s/charts/service
       # ✅ 關鍵：這裡動態拼接 app.id，達成 oci://.../rfjs/api
-      chart_repo: ${{ inputs.chart_repo }}
+      chart_repo_base: ${{ inputs.chart_repo_base }}
       environment: ${{ inputs.environment }}
       namespace: ${{ inputs.namespace }}
     secrets:
@@ -113,8 +113,9 @@ jobs:
           HARBOR_HOST: ${{ secrets.HARBOR_HOST }}
           HARBOR_USERNAME: ${{ secrets.HARBOR_USERNAME }}
           HARBOR_TOKEN: ${{ secrets.HARBOR_TOKEN }}
-          CHART_OCI_REPO: "${{ inputs.chart_repo }}"
-          HARBOR_PROJECT: "${{ inputs.registry_project }}" # 影響 Image 拉取路徑
+          CHART_REPO_BASE: "${{ inputs.chart_repo_base }}"
+          IMAGE_REPO_BASE: "${{ inputs.image_repo_base }}"
+          # env
           DATABASE_URL: ${{ secrets.ENV_DATABASE_URL }}
           APP_NAME: ${{ secrets.ENV_API_APP_NAME }}
         with:
