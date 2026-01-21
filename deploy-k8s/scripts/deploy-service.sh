@@ -23,66 +23,71 @@ fi
 
 echo "📖 Using values from: $ENV_FILE"
 
-# 1. 自動解除 Helm 鎖定 (如果狀態是 pending)
-# 這是為了解決 "another operation is in progress" 的常見痛點
+# 1. 自動解除 Helm 鎖定 (Pending 狀態處理)
 STATUS=$(helm status "$SERVICE_NAME" -n "$NAMESPACE" -o json 2>/dev/null | jq -r '.info.status' || echo "not-found")
 if [[ "$STATUS" == "pending-upgrade" || "$STATUS" == "pending-install" || "$STATUS" == "pending-rollback" ]]; then
-  echo "⚠️ Detected pending state ($STATUS). Rolling back to last stable version to unlock..."
-  # 回滾到 0 代表嘗試回到上一個成功狀態並解鎖
+  echo "⚠️ Detected pending state ($STATUS). Attempting to unlock..."
   helm rollback "$SERVICE_NAME" 0 -n "$NAMESPACE" || (echo "Force unlocking by deleting..." && helm uninstall "$SERVICE_NAME" -n "$NAMESPACE")
 fi
 
-# 1. 偵測部署類型
+# 2. 準備 Helm 參數
 DEPLOY_KIND=$(grep '^kind:' "$ENV_FILE" | awk '{print $2}' | tr -d '\r')
 DEPLOY_KIND="${DEPLOY_KIND:-Deployment}"
 
 VERSION_FLAG=""
-if [[ "$CHART_SOURCE" == oci://* ]] && [[ -n "${CHART_VERSION:-}" ]]; then
-  VERSION_FLAG="--version $CHART_VERSION"
+SET_FLAGS=""
+
+# ✅ 判斷是 OCI 還是 Local Folder
+if [[ "$CHART_SOURCE" == oci://* ]]; then
+  echo "📡 Mode: OCI Deployment (Using pre-baked values in Chart)"
+  if [[ -n "${CHART_VERSION:-}" ]]; then
+    VERSION_FLAG="--version $CHART_VERSION"
+  fi
+  # OCI 模式下，不使用 --set 覆蓋 image，除非你有特殊需求
+  SET_FLAGS=""
+else
+  echo "📂 Mode: Local Folder Deployment (Injecting image metadata)"
+  # Local 模式下，必須注入目前的 Image 資訊
+  SET_FLAGS="--set image.repository=$IMAGE_REPO --set image.tag=$IMAGE_TAG"
 fi
 
 echo "  ⚓ Running Helm Upgrade ($DEPLOY_KIND Mode)..."
 
-# 2. 執行 Helm 部署 (加入 --atomic 與自動回滾邏輯)
-# --atomic: 部署失敗時自動執行 rollback
-# --cleanup-on-fail: 失敗時清理遺留的無效資源
-# --history-max: 建議在 Helm 指令中或環境中設定，保持版本整潔
-if ! helm upgrade --install "$SERVICE_NAME" "$CHART_SOURCE" \
-  -n "$NAMESPACE" \
-  -f "$ENV_FILE" \
-  --set image.repository="$IMAGE_REPO" \
-  --set image.tag="$IMAGE_TAG" \
+# 3. 執行 Helm 部署
+# 使用 eval 來正確處理帶有空格或多個參數的變數
+if ! eval "helm upgrade --install \"$SERVICE_NAME\" \"$CHART_SOURCE\" \
+  -n \"$NAMESPACE\" \
+  -f \"$ENV_FILE\" \
+  $SET_FLAGS \
   $VERSION_FLAG \
   --atomic \
   --cleanup-on-fail \
-  --wait --timeout 5m; then
+  --wait --timeout 5m"; then
     
     echo "--------------------------------------------------"
     echo "❌ DEPLOYMENT FAILED! Started Diagnostics..."
     echo "--------------------------------------------------"
     
-    # 抓取 K8s 事件 (Events) 找出失敗原因 (例如：ImagePullBackOff, CrashLoopBackOff)
-    echo "🔍 Recent Kubernetes Events in $NAMESPACE:"
     kubectl -n "$NAMESPACE" get events --sort-by='.lastTimestamp' | tail -n 15
     
-    # 如果是 Deployment，嘗試抓取 Pod 日誌 (即使已經回滾，這能幫助找出崩潰原因)
     if [[ "$DEPLOY_KIND" == "Deployment" ]]; then
-      echo "📋 Fetching logs from current pods (post-rollback or failing):"
-      kubectl -n "$NAMESPACE" logs deploy/"${NAMESPACE}-$SERVICE_NAME" --tail=50 --all-containers || echo "Could not fetch logs."
+      echo "📋 Fetching logs from failing pods..."
+      # ✅ 修正：改用 Label Selector 抓日誌，避開 Name 拼接問題
+      kubectl -n "$NAMESPACE" logs -l "app.kubernetes.io/name=${NAMESPACE}-$SERVICE_NAME" --tail=50 --all-containers || echo "Could not fetch logs."
     fi
     
     echo "⚠️ Helm has automatically rolled back to the previous stable state."
     exit 1
 fi
 
-# 3. 額外狀態檢查 (針對 Job 類型)
+# 4. 額外狀態檢查 (針對 Job 類型)
 if [[ "$DEPLOY_KIND" == "Job" ]]; then
   echo "  ⏳ Waiting for Job completion..."
   if ! kubectl -n "$NAMESPACE" wait --for=condition=complete job \
-    --selector="app.kubernetes.io/name=$SERVICE_NAME" \
+    --selector="app.kubernetes.io/name=${NAMESPACE}-$SERVICE_NAME" \
     --timeout=5m; then
-      echo "❌ Job Failed or Timed out! Printing Pod Logs:"
-      kubectl -n "$NAMESPACE" logs --selector="app.kubernetes.io/name=$SERVICE_NAME" --tail=100
+      echo "❌ Job Failed or Timed out!"
+      kubectl -n "$NAMESPACE" logs --selector="app.kubernetes.io/name=${NAMESPACE}-$SERVICE_NAME" --tail=100
       exit 1
   fi
 fi
