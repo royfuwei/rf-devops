@@ -23,6 +23,15 @@ fi
 
 echo "📖 Using values from: $ENV_FILE"
 
+# 1. 自動解除 Helm 鎖定 (如果狀態是 pending)
+# 這是為了解決 "another operation is in progress" 的常見痛點
+STATUS=$(helm status "$SERVICE_NAME" -n "$NAMESPACE" -o json 2>/dev/null | jq -r '.info.status' || echo "not-found")
+if [[ "$STATUS" == "pending-upgrade" || "$STATUS" == "pending-install" || "$STATUS" == "pending-rollback" ]]; then
+  echo "⚠️ Detected pending state ($STATUS). Rolling back to last stable version to unlock..."
+  # 回滾到 0 代表嘗試回到上一個成功狀態並解鎖
+  helm rollback "$SERVICE_NAME" 0 -n "$NAMESPACE" || (echo "Force unlocking by deleting..." && helm uninstall "$SERVICE_NAME" -n "$NAMESPACE")
+fi
+
 # 1. 偵測部署類型
 DEPLOY_KIND=$(grep '^kind:' "$ENV_FILE" | awk '{print $2}' | tr -d '\r')
 DEPLOY_KIND="${DEPLOY_KIND:-Deployment}"

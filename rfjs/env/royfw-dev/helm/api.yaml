@@ -12,7 +12,7 @@ probes:
   enabled: false
 
 service:
-  port: 3000
+  port: 80
 containerPort: 3000
 
 secretEnv: {}
@@ -22,13 +22,7 @@ secrets:
   useEnvFrom: true
 
 ingress:
-  enabled: true  
-  annotations:
-    kubernetes.io/ingress.class: nginx # 建議補上這個
-    nginx.ingress.kubernetes.io/proxy-body-size: '0'
-    # ... 其餘 annotations
-    cert-manager.io/cluster-issuer: letsencrypt-dns
-
+  enabled: true
   hosts:
     - host: rfjs.api.royfuwei.dev
       paths:
@@ -37,6 +31,19 @@ ingress:
 
   # ✅ 修正這裡：改為數組格式
   tls:
-    - secretName: rfjs-tls-secret
-      hosts:
-        - rfjs.api.royfuwei.dev
+    enabled: true
+    secretName: rfjs-tls-secret  # 使用的 TLS 憑證
+    certManager:
+      enabled: true   # ✅ 改成底下是一個物件，這樣 template 可以用
+      issuerType: cluster-issuer  # "issuer" or "cluster-issuer"
+      issuerName: letsencrypt-dns
+      keepCertificate: false   # ⬅️ ✅ 新增這一行：控制是否啟用 "keep"
+  annotations:
+    spec.ingressClassName: nginx
+    nginx.ingress.kubernetes.io/proxy-body-size: '0'
+    nginx.ingress.kubernetes.io/proxy-read-timeout: '600'
+    nginx.ingress.kubernetes.io/proxy-send-timeout: '600'
+    nginx.ingress.kubernetes.io/use-regex: 'true'
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "false"   # ✅ 新增這行
+    cert-manager.io/cluster-issuer: letsencrypt-dns # 關閉自建 certificate 改用 cert-manager
