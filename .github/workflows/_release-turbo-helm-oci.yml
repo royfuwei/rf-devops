@@ -6,6 +6,7 @@ on:
       version: { required: true, type: string }
       chart_path: { required: true, type: string }
       chart_repo_base: { required: true, type: string }
+      image_repo_base: { required: true, type: string }
       app_id: { required: true, type: string }
       environment: { required: true, type: string }
       namespace: { required: true, type: string }
@@ -45,6 +46,7 @@ jobs:
           VERSION: ${{ inputs.version }}
           CHART_PATH: ${{ inputs.chart_path }}
           CHART_REPO_BASE: ${{ inputs.chart_repo_base }}
+          IMAGE_REPO_BASE: ${{ inputs.image_repo_base }}
           APP_ID: ${{ inputs.app_id }}
           PROJECT_ENV: ${{ inputs.environment }}
           PROJECT_ROOT: ${{ inputs.namespace }}
@@ -66,7 +68,7 @@ jobs:
           [ -f "$APP_SPECIFIC_VALUES" ] && cp -f "$APP_SPECIFIC_VALUES" "$CHART_PATH/values.yaml"
 
           # 2. ✅ 動態注入「開箱即用」配置 (必須在 cp 之後！)
-          IMAGE_PATH="${HARBOR_HOST}/${PROJECT_ROOT}/${APP_ID}"
+          IMAGE_PATH="${HARBOR_HOST}/${IMAGE_REPO_BASE}/${PROJECT_ROOT}/${APP_ID}"
           
           # 使用更加寬鬆的 sed 匹配，確保能抓到 repository: "" 或 repository:
           # 並確保 tag 也有引號保護

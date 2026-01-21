@@ -34,6 +34,8 @@ fi
 DEPLOY_KIND=$(grep '^kind:' "$ENV_FILE" | awk '{print $2}' | tr -d '\r')
 DEPLOY_KIND="${DEPLOY_KIND:-Deployment}"
 
+SELECT_LABEL="app.kubernetes.io/name=${NAMESPACE}-${SERVICE_NAME}"
+
 # 3. 準備 Helm 參數數組 (最穩健的執行方式)
 HELM_OPTS=(
   "upgrade" "--install" "$SERVICE_NAME" "$CHART_SOURCE"
@@ -68,19 +70,12 @@ if ! helm "${HELM_OPTS[@]}"; then
     echo "❌ DEPLOYMENT FAILED! Started Diagnostics..."
     echo "--------------------------------------------------"
     
-    # 抓取 K8s 事件
-    kubectl -n "$NAMESPACE" get events --sort-by='.lastTimestamp' | tail -n 15
-    
     # 抓取日誌 (使用 Label Selector 避開 fullnameOverride)
-    if [[ "$DEPLOY_KIND" == "Deployment" ]]; then
-      echo "📋 Fetching logs from failing pods..."
-      # ⚠️ 這裡的 Label 名稱必須與你的 _helpers.tpl 產出的 selectorLabels 一致
-      # 根據你的 api.yaml，通常是 app.kubernetes.io/name=${SERVICE_NAME} 
-      # 或是像你寫的 ${NAMESPACE}-$SERVICE_NAME
-      kubectl -n "$NAMESPACE" logs -l "app.kubernetes.io/name=${SERVICE_NAME}" --tail=50 --all-containers || echo "Could not fetch logs."
-    fi
+    echo "🔍 Checking Pod Spec for imagePullSecrets..."
+    kubectl get pods -n "$NAMESPACE" -l "$SELECT_LABEL" -o jsonpath='{.items[0].spec.imagePullSecrets}' || echo "No Pod found."
     
-    echo "⚠️ Helm has automatically rolled back to the previous stable state."
+    echo "📋 Recent Events (Look for 401 errors):"
+    kubectl -n "$NAMESPACE" get events --sort-by='.lastTimestamp' | tail -n 15
     exit 1
 fi
 
@@ -89,15 +84,14 @@ fi
 # 5. 額外狀態檢查 (針對 Job 類型)
 if [[ "$DEPLOY_KIND" == "Job" ]]; then
   # ✅ 對齊你剛才 kubectl get job 看到的正確標籤
-  SELECT_LABEL="app.kubernetes.io/name=${NAMESPACE}-${SERVICE_NAME}"
   
   echo "  ⏳ Waiting for Job completion (Selector: $SELECT_LABEL)..."
   
   # 嘗試等待
   if ! kubectl -n "$NAMESPACE" wait --for=condition=complete job \
     --selector="$SELECT_LABEL" \
-    --timeout=5m; thenif [[ "$DEPLOY_KIND" == "Job" ]]; then
-  SELECT_LABEL="app.kubernetes.io/name=${NAMESPACE}-${SERVICE_NAME}"
+    --timeout=5m; then
+  
   echo "  ⏳ Waiting for Job completion (Selector: $SELECT_LABEL)..."
 
   # 啟動後台監控：如果 20 秒內出現 Pull 錯誤，立刻回報

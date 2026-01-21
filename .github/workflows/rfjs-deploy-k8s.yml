@@ -87,6 +87,7 @@ jobs:
       chart_path: deploy-k8s/charts/service
       # ✅ 關鍵：這裡動態拼接 app.id，達成 oci://.../rfjs/api
       chart_repo_base: ${{ inputs.chart_repo_base }}
+      image_repo_base: ${{ inputs.image_repo_base }}
       environment: ${{ inputs.environment }}
       namespace: ${{ inputs.namespace }}
     secrets:
