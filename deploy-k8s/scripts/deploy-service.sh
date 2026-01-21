@@ -9,20 +9,15 @@ set -euo pipefail
 : "${NAMESPACE:=test}"
 : "${ENV_NAME:=NewK8s}"
 
+# 路徑定位
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-# 這裡是 rf-devops/deploy-k8s
 DEPLOY_K8S_ROOT="$(dirname "$SCRIPT_DIR")"
-# 這裡是 rf-devops 根目錄
 REPO_ROOT="$(dirname "$DEPLOY_K8S_ROOT")"
 
-# ✅ 根據你的 tree 結構修正路徑：
-# ./rfjs/env/royfw-dev/helm/api.yaml
 ENV_FILE="${REPO_ROOT}/${NAMESPACE}/env/${ENV_NAME}/helm/${SERVICE_NAME}.yaml"
 
 if [[ ! -f "$ENV_FILE" ]]; then
   echo "❌ values file not found: $ENV_FILE"
-  echo "🔍 Check directory: ${REPO_ROOT}/${NAMESPACE}/env/${ENV_NAME}/helm/"
-  ls -F "${REPO_ROOT}/${NAMESPACE}/env/${ENV_NAME}/helm/" || true
   exit 1
 fi
 
@@ -39,37 +34,46 @@ fi
 
 echo "  ⚓ Running Helm Upgrade ($DEPLOY_KIND Mode)..."
 
-# 2. 執行 Helm 部署
-# 使用 || 捕獲 Helm 指令失敗的情境
+# 2. 執行 Helm 部署 (加入 --atomic 與自動回滾邏輯)
+# --atomic: 部署失敗時自動執行 rollback
+# --cleanup-on-fail: 失敗時清理遺留的無效資源
+# --history-max: 建議在 Helm 指令中或環境中設定，保持版本整潔
 if ! helm upgrade --install "$SERVICE_NAME" "$CHART_SOURCE" \
   -n "$NAMESPACE" \
   -f "$ENV_FILE" \
   --set image.repository="$IMAGE_REPO" \
   --set image.tag="$IMAGE_TAG" \
   $VERSION_FLAG \
+  --atomic \
+  --cleanup-on-fail \
   --wait --timeout 5m; then
-    echo "❌ Helm Upgrade Failed! Fetching recent events..."
-    kubectl -n "$NAMESPACE" get events --sort-by='.lastTimestamp' | tail -n 10
+    
+    echo "--------------------------------------------------"
+    echo "❌ DEPLOYMENT FAILED! Started Diagnostics..."
+    echo "--------------------------------------------------"
+    
+    # 抓取 K8s 事件 (Events) 找出失敗原因 (例如：ImagePullBackOff, CrashLoopBackOff)
+    echo "🔍 Recent Kubernetes Events in $NAMESPACE:"
+    kubectl -n "$NAMESPACE" get events --sort-by='.lastTimestamp' | tail -n 15
+    
+    # 如果是 Deployment，嘗試抓取 Pod 日誌 (即使已經回滾，這能幫助找出崩潰原因)
+    if [[ "$DEPLOY_KIND" == "Deployment" ]]; then
+      echo "📋 Fetching logs from current pods (post-rollback or failing):"
+      kubectl -n "$NAMESPACE" logs deploy/"$SERVICE_NAME" --tail=50 --all-containers || echo "Could not fetch logs."
+    fi
+    
+    echo "⚠️ Helm has automatically rolled back to the previous stable state."
     exit 1
 fi
 
-# 3. 狀態檢查與自動偵錯
+# 3. 額外狀態檢查 (針對 Job 類型)
 if [[ "$DEPLOY_KIND" == "Job" ]]; then
   echo "  ⏳ Waiting for Job completion..."
   if ! kubectl -n "$NAMESPACE" wait --for=condition=complete job \
     --selector="app.kubernetes.io/name=$SERVICE_NAME" \
     --timeout=5m; then
       echo "❌ Job Failed or Timed out! Printing Pod Logs:"
-      # 自動抓取該 Job 的 Pod 日誌
       kubectl -n "$NAMESPACE" logs --selector="app.kubernetes.io/name=$SERVICE_NAME" --tail=100
-      exit 1
-  fi
-else
-  echo "  ⏳ Waiting for Deployment rollout..."
-  if ! kubectl -n "$NAMESPACE" rollout status deploy/"$SERVICE_NAME" --timeout=5m; then
-      echo "❌ Rollout Failed! Printing Pod Logs:"
-      # 自動抓取 Deployment 崩潰的日誌
-      kubectl -n "$NAMESPACE" logs deploy/"$SERVICE_NAME" --tail=100 --all-containers
       exit 1
   fi
 fi
