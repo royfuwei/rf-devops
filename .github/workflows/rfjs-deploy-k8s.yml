@@ -6,6 +6,8 @@ on:
       ref: { type: string, required: true }
       environment: { type: string, default: k8s-royfw }
       namespace: { type: string, default: rfjs }
+      registry_project: { type: string, default: "royfw/rfjs" } # A 選項：控制 Harbor project (royfw vs rfjs)
+      chart_repo_prefix: { type: string, default: "royfw/charts/rfjs" }
     secrets:
       GIT_TOKEN: { required: true }
       KUBE_CONFIG: { required: true }
@@ -60,8 +62,8 @@ jobs:
         app: ${{ fromJson(needs.detect.outputs.apps_matrix) }}
     uses: ./.github/workflows/_release-turbo-docker.yml
     with:
-      projectName: rfjs/${{ matrix.app.id }}
-      projectSource: royfw
+      projectName: ${{ inputs.namespace }}/${{ matrix.app.id }} # 例如 rfjs/api
+      projectSource: ${{ inputs.registry_project }}           # 例如 royfw
       version: ${{ matrix.app.version }}
       buildPath: ./${{ matrix.app.path }}/Dockerfile
       environment: ${{ inputs.environment }}
@@ -78,9 +80,12 @@ jobs:
     strategy:
       matrix:
         app: ${{ fromJson(needs.detect.outputs.apps_matrix) }}
-    uses: ./.github/workflows/_release-helm-service.yml
+    uses: ./.github/workflows/_release-helm-oci.yml
     with:
-      app_version: ${{ matrix.app.version }}
+      version: ${{ matrix.app.version }}
+      chart_path: deploy-k8s/charts/service
+      # ✅ 關鍵：這裡動態拼接 app.id，達成 oci://.../rfjs/api
+      chart_repo: ${{ inputs.chart_repo_prefix }}/${{ matrix.app.id }}
     secrets:
       HARBOR_HOST: ${{ secrets.HARBOR_HOST }}
       HARBOR_USERNAME: ${{ secrets.HARBOR_USERNAME }}
@@ -105,11 +110,10 @@ jobs:
           HARBOR_HOST: ${{ secrets.HARBOR_HOST }}
           HARBOR_USERNAME: ${{ secrets.HARBOR_USERNAME }}
           HARBOR_TOKEN: ${{ secrets.HARBOR_TOKEN }}
-          # ✅ 開啟 OCI 模式，指向量產型 Repo
-          CHART_OCI_REPO: "oci://${{ secrets.HARBOR_HOST }}/royfw/charts/rfjs"
+          CHART_OCI_PREFIX: "${{ inputs.chart_repo_prefix }}"
+          HARBOR_PROJECT: "${{ inputs.registry_project }}" # 影響 Image 拉取路徑
           DATABASE_URL: ${{ secrets.ENV_DATABASE_URL }}
           APP_NAME: ${{ secrets.ENV_API_APP_NAME }}
-          HARBOR_PROJECT: "rfjs"
         with:
           kubeconfig: '${{ secrets.KUBE_CONFIG }}'
           exec: |

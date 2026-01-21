@@ -1,0 +1,76 @@
+name: Release Helm Chart (OCI)
+
+on:
+  workflow_call:
+    inputs:
+      version: { required: true, type: string }
+      chart_path: { required: true, type: string }     # e.g. deploy-k8s/charts/service
+      chart_repo: { required: true, type: string }     # e.g. royfw/charts/rfjs/api
+    secrets:
+      HARBOR_HOST: { required: true }
+      HARBOR_USERNAME: { required: true }
+      HARBOR_TOKEN: { required: true }
+      GIT_TOKEN: { required: true }
+
+jobs:
+  release-helm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: royfw/rf-devops
+          token: ${{ secrets.GIT_TOKEN }}
+
+      - name: Install Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: 3.14.0
+
+      - name: Login to Harbor
+        shell: bash
+        run: |
+          set -euo pipefail
+          RAW='${{ secrets.HARBOR_HOST }}'
+          HOST="$(printf '%s' "$RAW" | tr -d '\r' | xargs)"
+          HOST="${HOST#http://}"; HOST="${HOST#https://}"; HOST="${HOST%/}"
+          echo "HARBOR_HOST_NORMALIZED=$HOST" >> "$GITHUB_ENV"
+
+          echo '${{ secrets.HARBOR_TOKEN }}' | helm registry login "$HOST" \
+            --username '${{ secrets.HARBOR_USERNAME }}' \
+            --password-stdin
+
+      - name: Package and Push
+        shell: bash
+        env:
+          VERSION: ${{ inputs.version }}
+          CHART_PATH: ${{ inputs.chart_path }}
+          CHART_REPO: ${{ inputs.chart_repo }}
+        run: |
+          set -euo pipefail
+          
+          # ✅ 取得 APP_ID (從 chart_repo 的最後一段取得，例如 api)
+          CHART_NAME=$(basename "$CHART_REPO")
+          echo "🏷️ Dynamic Chart Name: $CHART_NAME"
+          
+          # ✅ 修改 Chart.yaml 的 name 屬性，讓 K8s 辨識度更高
+          # 這裡使用備份副檔名 .bak 以確保 sed 在不同環境的相容性
+          sed -i.bak "s/^name: .*/name: $CHART_NAME/" "$CHART_PATH/Chart.yaml"
+
+          OUT_DIR="$(pwd)/.helm-packages"
+          mkdir -p "$OUT_DIR"
+
+          # 打包時會使用修改過的 Chart.yaml
+          helm package "$CHART_PATH" \
+            --version "$VERSION" \
+            --app-version "$VERSION" \
+            --destination "$OUT_DIR"
+
+          PKG="$(ls -1 "$OUT_DIR"/*.tgz | tail -n 1)"
+          echo "🚀 Pushing OCI artifact: $PKG to oci://${HARBOR_HOST_NORMALIZED}/${CHART_REPO}"
+          
+          helm push "$PKG" "oci://${HARBOR_HOST_NORMALIZED}/${CHART_REPO}"
+
+      - name: Logout Harbor
+        if: always()
+        run: |
+          helm registry logout "${HARBOR_HOST_NORMALIZED}" || true

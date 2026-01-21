@@ -18,26 +18,29 @@ for row in $(echo "${APPS_JSON}" | jq -r '.[] | @base64'); do
     APP_ID=$(_jq '.id')
     APP_VERSION=$(_jq '.version')
 
-    echo "📦 App: $APP_ID (v$APP_VERSION)"
-
-    # 1. Secrets
+    # 1. 建立該 App 專屬變數
     export SERVICE_NAME="$APP_ID"
     export ROOT_DIR="." 
-    # 確保這裡的路徑在當前目錄下能找到
-    bash ./scripts/deploy-secret.sh
-
-    # 2. OCI vs Local 邏輯
-    if [[ -n "${CHART_OCI_REPO:-}" ]]; then
+    
+    # 2. 決定 Chart 來源 (OCI vs Local)
+    if [[ -n "${CHART_OCI_PREFIX:-}" ]]; then
         echo "  📡 Mode: OCI Deployment"
-        export CHART_SOURCE="$CHART_OCI_REPO"
-        export CHART_VERSION="${APP_VERSION}" # 動態更新 OCI Value
+        # ✅ 修正：直接在這裡拼接完整的 OCI Path
+        export CHART_SOURCE="oci://${HARBOR_HOST}/${CHART_OCI_PREFIX}/${APP_ID}"
+        export CHART_VERSION="${APP_VERSION}"
+        
+        # 登入一次即可，或在循環外登入以增進效率
         echo "$HARBOR_TOKEN" | helm registry login "$HARBOR_HOST" --username "$HARBOR_USERNAME" --password-stdin > /dev/null 2>&1
     else
         echo "  📂 Mode: Local Chart Deployment"
         export CHART_SOURCE="./charts/service"
+        unset CHART_VERSION # 確保不會帶到舊的版號
     fi
 
-    # 3. Image
+    # 3. 處理 Secrets (這部分沒問題)
+    bash ./scripts/deploy-secret.sh
+
+    # 4. 處理 Image 路徑
     export REGISTRY_BASE="${HARBOR_HOST}/${HARBOR_PROJECT}"
     export IMAGE_REPO="${REGISTRY_BASE}/${APP_ID}"
     export IMAGE_TAG="$APP_VERSION"
