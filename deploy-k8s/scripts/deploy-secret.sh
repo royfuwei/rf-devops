@@ -7,6 +7,8 @@ SERVICE_NAME="${SERVICE_NAME:-}"               # 例如 api
 ROOT_DIR="${ROOT_DIR:-.}"                      # 允許從任意 cwd 執行
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+# 定義倉庫根目錄，以便跳轉到專案目錄 (如 rfjs)
+REPO_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
 DEPLOY_K8S_ROOT="$(dirname "$SCRIPT_DIR")"
 
 echo "Using namespace: $NAMESPACE"
@@ -49,14 +51,15 @@ if [[ -z "$SERVICE_NAME" ]]; then
   exit 0
 fi
 
-ENV_DIR="${DEPLOY_K8S_ROOT}/env/${ENV_NAME}"
+# ✅ 修正：根據 tree 結構定義路徑
+# 預期路徑：./rfjs/env/royfw-dev/env_keys/api.secrets.keys
+ENV_DIR="${REPO_ROOT}/${NAMESPACE}/env/${ENV_NAME}/env_keys"
 KEYS_FILE="${ENV_DIR}/${SERVICE_NAME}.secrets.keys"
 COMMON_KEYS_FILE="${ENV_DIR}/common.secrets.keys"
 
-# ✅ 修正：如果找不到 keys 檔案，優雅跳過而不是報錯
+# ✅ 修正：如果找不到 keys 檔案，優雅跳過
 if [[ ! -f "$KEYS_FILE" ]]; then
   echo "ℹ️ No specific keys file found for $SERVICE_NAME at $KEYS_FILE. Skipping generic secret creation."
-  # 如果連 common 也沒必要跑，就直接結束這個腳本
   exit 0
 fi
 

@@ -10,13 +10,23 @@ set -euo pipefail
 : "${ENV_NAME:=NewK8s}"
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+# 這裡是 rf-devops/deploy-k8s
 DEPLOY_K8S_ROOT="$(dirname "$SCRIPT_DIR")"
+# 這裡是 rf-devops 根目錄
+REPO_ROOT="$(dirname "$DEPLOY_K8S_ROOT")"
 
-ENV_FILE="${DEPLOY_K8S_ROOT}/env/${ENV_NAME}/${SERVICE_NAME}.yaml"
+# ✅ 根據你的 tree 結構修正路徑：
+# ./rfjs/env/royfw-dev/helm/api.yaml
+ENV_FILE="${REPO_ROOT}/${NAMESPACE}/env/${ENV_NAME}/helm/${SERVICE_NAME}.yaml"
+
 if [[ ! -f "$ENV_FILE" ]]; then
   echo "❌ values file not found: $ENV_FILE"
+  echo "🔍 Check directory: ${REPO_ROOT}/${NAMESPACE}/env/${ENV_NAME}/helm/"
+  ls -F "${REPO_ROOT}/${NAMESPACE}/env/${ENV_NAME}/helm/" || true
   exit 1
 fi
+
+echo "📖 Using values from: $ENV_FILE"
 
 # 1. 偵測部署類型
 DEPLOY_KIND=$(grep '^kind:' "$ENV_FILE" | awk '{print $2}' | tr -d '\r')
