@@ -88,6 +88,10 @@ jobs:
           OUT_DIR="$(pwd)/.helm-packages"
           mkdir -p "$OUT_DIR"
 
+          # 在處理完 Chart.yaml 與 values.yaml 後，打包前執行
+          echo "📦 Updating dependencies..."
+          helm dependency update "$CHART_PATH"
+
           helm package "$CHART_PATH" \
             --version "$VERSION" \
             --app-version "$VERSION" \
