@@ -38,7 +38,6 @@ DEPLOY_KIND="${DEPLOY_KIND:-Deployment}"
 HELM_OPTS=(
   "upgrade" "--install" "$SERVICE_NAME" "$CHART_SOURCE"
   "-n" "$NAMESPACE"
-  "-f" "$ENV_FILE"
   "--atomic"
   "--cleanup-on-fail"
   "--wait"
@@ -54,6 +53,7 @@ if [[ "$CHART_SOURCE" == oci://* ]]; then
   # OCI 模式下預設不帶 --set，相信 Release 端的燒錄
 else
   echo "📂 Mode: Local Folder Deployment"
+  HELM_OPTS+=("-f" "$ENV_FILE")
   HELM_OPTS+=("--set" "image.repository=${IMAGE_REPO}")
   HELM_OPTS+=("--set" "image.tag=${IMAGE_TAG}")
 fi
@@ -85,13 +85,40 @@ if ! helm "${HELM_OPTS[@]}"; then
 fi
 
 # 5. 額外狀態檢查 (針對 Job 類型)
+# 修正後的 deploy-service.sh Job 檢查區塊
+# 5. 額外狀態檢查 (針對 Job 類型)
 if [[ "$DEPLOY_KIND" == "Job" ]]; then
-  echo "  ⏳ Waiting for Job completion..."
+  # ✅ 對齊你剛才 kubectl get job 看到的正確標籤
+  SELECT_LABEL="app.kubernetes.io/name=${NAMESPACE}-${SERVICE_NAME}"
+  
+  echo "  ⏳ Waiting for Job completion (Selector: $SELECT_LABEL)..."
+  
+  # 嘗試等待
   if ! kubectl -n "$NAMESPACE" wait --for=condition=complete job \
-    --selector="app.kubernetes.io/name=${SERVICE_NAME}" \
+    --selector="$SELECT_LABEL" \
+    --timeout=5m; thenif [[ "$DEPLOY_KIND" == "Job" ]]; then
+  SELECT_LABEL="app.kubernetes.io/name=${NAMESPACE}-${SERVICE_NAME}"
+  echo "  ⏳ Waiting for Job completion (Selector: $SELECT_LABEL)..."
+
+  # 啟動後台監控：如果 20 秒內出現 Pull 錯誤，立刻回報
+  (
+    for i in {1..10}; do
+      sleep 5
+      REASON=$(kubectl get pods -n "$NAMESPACE" -l "$SELECT_LABEL" -o jsonpath='{.items[0].status.containerStatuses[0].state.waiting.reason}' 2>/dev/null || echo "")
+      if [[ "$REASON" == "ImagePullBackOff" || "$REASON" == "ErrImagePull" ]]; then
+        echo "❌ ERROR: Pod is stuck in $REASON! Check your registry credentials."
+        # 強制中斷父進程的 wait (這是一個小技巧，或是讓 wait 自己超時)
+        exit 1
+      fi
+    done
+  ) &
+
+  if ! kubectl -n "$NAMESPACE" wait --for=condition=complete job \
+    --selector="$SELECT_LABEL" \
     --timeout=5m; then
       echo "❌ Job Failed or Timed out!"
-      kubectl -n "$NAMESPACE" logs --selector="app.kubernetes.io/name=${SERVICE_NAME}" --tail=100
+      # 診斷：自動列印 Events 幫助抓 401 錯誤
+      kubectl -n "$NAMESPACE" get events --sort-by='.lastTimestamp' | grep -i "failed" | tail -n 5
       exit 1
   fi
 fi
