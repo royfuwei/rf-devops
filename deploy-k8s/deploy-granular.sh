@@ -23,10 +23,10 @@ for row in $(echo "${APPS_JSON}" | jq -r '.[] | @base64'); do
     export ROOT_DIR="." 
     
     # 2. 決定 Chart 來源 (OCI vs Local)
-    if [[ -n "${CHART_OCI_PREFIX:-}" ]]; then
+    if [[ -n "${CHART_OCI_REPO:-}" ]]; then
         echo "  📡 Mode: OCI Deployment"
         # ✅ 修正：直接在這裡拼接完整的 OCI Path
-        export CHART_SOURCE="oci://${HARBOR_HOST}/${CHART_OCI_PREFIX}/${APP_ID}"
+        export CHART_SOURCE="oci://${HARBOR_HOST}/${CHART_OCI_REPO}/${APP_ID}"
         export CHART_VERSION="${APP_VERSION}"
         
         # 登入一次即可，或在循環外登入以增進效率

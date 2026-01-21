@@ -5,7 +5,9 @@ on:
     inputs:
       version: { required: true, type: string }
       chart_path: { required: true, type: string }     # e.g. deploy-k8s/charts/service
-      chart_repo: { required: true, type: string }     # e.g. royfw/charts/rfjs/api
+      chart_repo: { required: true, type: string }     # e.g. royfw/charts/rfjs
+      app_id: { required: true, type: string }            # e.g. api
+      environment: { required: true, type: string }
     secrets:
       HARBOR_HOST: { required: true }
       HARBOR_USERNAME: { required: true }
@@ -45,11 +47,12 @@ jobs:
           VERSION: ${{ inputs.version }}
           CHART_PATH: ${{ inputs.chart_path }}
           CHART_REPO: ${{ inputs.chart_repo }}
+          APP_ID: ${{ inputs.app_id }}
         run: |
           set -euo pipefail
           
           # ✅ 取得 APP_ID (從 chart_repo 的最後一段取得，例如 api)
-          CHART_NAME=$(basename "$CHART_REPO")
+          CHART_NAME=$(basename "$APP_ID")
           echo "🏷️ Dynamic Chart Name: $CHART_NAME"
           
           # ✅ 修改 Chart.yaml 的 name 屬性，讓 K8s 辨識度更高
@@ -66,7 +69,7 @@ jobs:
             --destination "$OUT_DIR"
 
           PKG="$(ls -1 "$OUT_DIR"/*.tgz | tail -n 1)"
-          echo "🚀 Pushing OCI artifact: $PKG to oci://${HARBOR_HOST_NORMALIZED}/${CHART_REPO}"
+          echo "🚀 Pushing OCI artifact: $PKG to oci://${HARBOR_HOST_NORMALIZED}/${CHART_REPO}/${APP_ID}"
           
           helm push "$PKG" "oci://${HARBOR_HOST_NORMALIZED}/${CHART_REPO}"
 

@@ -7,7 +7,7 @@ on:
       environment: { type: string, default: k8s-royfw }
       namespace: { type: string, default: rfjs }
       registry_project: { type: string, default: "royfw/rfjs" } # A 選項：控制 Harbor project (royfw vs rfjs)
-      chart_repo_prefix: { type: string, default: "royfw/charts/rfjs" }
+      chart_repo: { type: string, default: "royfw/charts/rfjs" }
     secrets:
       GIT_TOKEN: { required: true }
       KUBE_CONFIG: { required: true }
@@ -83,9 +83,11 @@ jobs:
     uses: ./.github/workflows/_release-helm-oci.yml
     with:
       version: ${{ matrix.app.version }}
+      app_id: ${{ matrix.app.id }}
       chart_path: deploy-k8s/charts/service
       # ✅ 關鍵：這裡動態拼接 app.id，達成 oci://.../rfjs/api
-      chart_repo: ${{ inputs.chart_repo_prefix }}
+      chart_repo: ${{ inputs.chart_repo }}
+      environment: ${{ inputs.environment }}
     secrets:
       HARBOR_HOST: ${{ secrets.HARBOR_HOST }}
       HARBOR_USERNAME: ${{ secrets.HARBOR_USERNAME }}
@@ -110,7 +112,7 @@ jobs:
           HARBOR_HOST: ${{ secrets.HARBOR_HOST }}
           HARBOR_USERNAME: ${{ secrets.HARBOR_USERNAME }}
           HARBOR_TOKEN: ${{ secrets.HARBOR_TOKEN }}
-          CHART_OCI_PREFIX: "${{ inputs.chart_repo_prefix }}"
+          CHART_OCI_REPO: "${{ inputs.chart_repo }}"
           HARBOR_PROJECT: "${{ inputs.registry_project }}" # 影響 Image 拉取路徑
           DATABASE_URL: ${{ secrets.ENV_DATABASE_URL }}
           APP_NAME: ${{ secrets.ENV_API_APP_NAME }}
