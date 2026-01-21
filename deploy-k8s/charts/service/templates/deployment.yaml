@@ -46,18 +46,19 @@ spec:
           {{- end }}
 
           # ✅ 3. 注意：請確認你的 App 真的有 /health 路由
-          # 如果沒有，Probe 會失敗導致 Pod 不斷重啟 (CrashLoopBackOff)
-          {{- if .Values.probes.enabled }}
+          # ✅ 使用 default 建立一個空的 map，確保 index 永遠能執行
+          {{- $probes := .Values.probes | default dict -}}
+          {{- if $probes.enabled }}
           readinessProbe:
             httpGet:
-              path: {{ .Values.probes.path | default "/health" }}
+              path: {{ $probes.path | default "/health" }}
               port: {{ .Values.containerPort | default 3000 }}
             initialDelaySeconds: 5
             periodSeconds: 10
 
           livenessProbe:
             httpGet:
-              path: {{ .Values.probes.path | default "/health" }}
+              path: {{ $probes.path | default "/health" }}
               port: {{ .Values.containerPort | default 3000 }}
             initialDelaySeconds: 15
             periodSeconds: 20
