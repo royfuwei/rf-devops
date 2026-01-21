@@ -1,6 +1,9 @@
 kind: Job
 
-fullnameOverride: orm-app
+image:
+  repository: ""
+  tag: ""
+  pullPolicy: IfNotPresent
 
 # Job 不需要 Ingress, Service, 或 Probes
 probes:

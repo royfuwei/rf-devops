@@ -44,42 +44,53 @@ jobs:
         env:
           VERSION: ${{ inputs.version }}
           CHART_PATH: ${{ inputs.chart_path }}
-          CHART_REPO_BASE: ${{ inputs.chart_repo_base }}  # e.g., royfw/rfjs/charts
+          CHART_REPO_BASE: ${{ inputs.chart_repo_base }}
           APP_ID: ${{ inputs.app_id }}
-          PROJECT_ENV: ${{ inputs.environment }}        # e.g., k8s-royfw
+          PROJECT_ENV: ${{ inputs.environment }}
           PROJECT_ROOT: ${{ inputs.namespace }}
         run: |
           set -euo pipefail
 
-          # ✅ 1. 恢復純淨版號，不再拼接環境名到 Tag
           CHART_VERSION="${VERSION}"
           CHART_NAME="$APP_ID"
-          
-          # ✅ 2. 構建帶有環境的路徑 (方案 A: .../charts/環境/App)
-          # 這裡推送到父路徑，helm push 會自動補上 APP_ID 這一層
           TARGET_REPO_ROOT="${CHART_REPO_BASE}/${PROJECT_ENV}"
           
           ENV_HELM_DIR="./${PROJECT_ROOT}/env/${PROJECT_ENV}/helm"
           APP_SPECIFIC_VALUES="${ENV_HELM_DIR}/${APP_ID}.yaml"
 
-          echo "🛠️ 準備環境專屬 Chart: $CHART_NAME (路徑: $TARGET_REPO_ROOT)"
-
-          # 3. 處理覆寫邏輯 (維持原樣)
+          # 1. 處理覆寫邏輯
           [ -f "${ENV_HELM_DIR}/Chart.yaml" ] && cp -f "${ENV_HELM_DIR}/Chart.yaml" "$CHART_PATH/Chart.yaml"
           [ -f "${ENV_HELM_DIR}/values.yaml" ] && cp -f "${ENV_HELM_DIR}/values.yaml" "$CHART_PATH/values.yaml"
           [ -f "$APP_SPECIFIC_VALUES" ] && cp -f "$APP_SPECIFIC_VALUES" "$CHART_PATH/values.yaml"
 
-          # 4. 同步 Chart 元數據
-          sed -i.bak "s/^name: .*/name: $CHART_NAME/" "$CHART_PATH/Chart.yaml"
-          sed -i.bak "s/^version: .*/version: $CHART_VERSION/" "$CHART_PATH/Chart.yaml"
+          # 2. ✅ 精準注入配置 (使用引號保護變數值)
+          IMAGE_PATH="${{ secrets.HARBOR_HOST }}/${PROJECT_ROOT}/${APP_ID}"
+          
+          # 使用 ^ 確保只匹配頂層或特定縮排的 repository
+          sed -i.bak "s|^  repository:.*|  repository: \"${IMAGE_PATH}\"|" "$CHART_PATH/values.yaml"
+          sed -i.bak "s|^  tag:.*|  tag: \"${VERSION}\"|" "$CHART_PATH/values.yaml"
 
-          # 5. 打包
+          FULLNAME="${PROJECT_ROOT}-${APP_ID}"
+          if grep -q "fullnameOverride:" "$CHART_PATH/values.yaml"; then
+            sed -i.bak "s|^fullnameOverride:.*|fullnameOverride: \"${FULLNAME}\"|" "$CHART_PATH/values.yaml"
+          else
+            echo "fullnameOverride: \"${FULLNAME}\"" >> "$CHART_PATH/values.yaml"
+          fi
+
+          # 3. 同步 Chart 元數據 (包含 appVersion)
+          sed -i.bak "s|^name: .*|name: $CHART_NAME|" "$CHART_PATH/Chart.yaml"
+          sed -i.bak "s|^version: .*|version: $CHART_VERSION|" "$CHART_PATH/Chart.yaml"
+          sed -i.bak "s|^appVersion: .*|appVersion: \"$VERSION\"|" "$CHART_PATH/Chart.yaml"
+
+          # 4. 打包與推送
           helm dependency update "$CHART_PATH"
           OUT_DIR="$(pwd)/.helm-packages"
           mkdir -p "$OUT_DIR"
-          helm package "$CHART_PATH" --version "$CHART_VERSION" --app-version "$VERSION" --destination "$OUT_DIR"
+          
+          helm package "$CHART_PATH" \
+            --version "$CHART_VERSION" \
+            --app-version "$VERSION" \
+            --destination "$OUT_DIR"
 
-          # 6. 推送至環境專屬路徑
           PKG="$(ls -1 "$OUT_DIR"/*.tgz | tail -n 1)"
-          # 推送到 .../charts/k8s-royfw，最終在 Harbor 會是 .../charts/k8s-royfw/api
           helm push "$PKG" "oci://${HARBOR_HOST_NORMALIZED}/${TARGET_REPO_ROOT}"
