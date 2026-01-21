@@ -1,0 +1,25 @@
+kind: Job
+
+image:
+  repository: ""
+  tag: ""
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+
+# Job 不需要 Ingress, Service, 或 Probes
+probes:
+  enabled: false
+# 可以傳入特定參數執行 migration
+# env:
+#   COMMAND: "npm run migrate"
+
+secretEnv: {}
+
+secrets:
+  existingSecretName: orm-app-env
+  useEnvFrom: true
+
+  
+ingress:
+  enabled: false

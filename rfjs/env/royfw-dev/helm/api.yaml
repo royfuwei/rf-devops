@@ -1,14 +1,13 @@
 kind: Deployment
 
-fullnameOverride: api
+image:
+  repository: ""
+  tag: ""
+  pullPolicy: IfNotPresent
 
 service:
   port: 3000
 containerPort: 3000
-
-env:
-  APP_NAME: "rfjs/app"
-  PORT: "3000"
 
 secretEnv: {}
 
@@ -42,19 +41,3 @@ ingress:
     - secretName: rfjs-tls-secret
       hosts:
         - rfjs.api.royfw.dev
-
-# Traefik + cert-manager
-# ingress:
-#   enabled: true
-#   className: traefik
-#   annotations:
-#     cert-manager.io/cluster-issuer: "letsencrypt-prod"
-#   hosts:
-#     - host: api.royfw.dev
-#       paths:
-#         - path: /
-#   tls:
-#     - secretName: api-tls
-#       hosts:
-#         - api.royfw.dev
-
