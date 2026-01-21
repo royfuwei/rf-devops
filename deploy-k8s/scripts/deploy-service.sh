@@ -30,63 +30,68 @@ if [[ "$STATUS" == "pending-upgrade" || "$STATUS" == "pending-install" || "$STAT
   helm rollback "$SERVICE_NAME" 0 -n "$NAMESPACE" || (echo "Force unlocking by deleting..." && helm uninstall "$SERVICE_NAME" -n "$NAMESPACE")
 fi
 
-# 2. 準備 Helm 參數
+# 2. 偵測部署類型 (由 values.yaml 決定)
 DEPLOY_KIND=$(grep '^kind:' "$ENV_FILE" | awk '{print $2}' | tr -d '\r')
 DEPLOY_KIND="${DEPLOY_KIND:-Deployment}"
 
-# 確保版本號存在
-: "${CHART_VERSION:?missing CHART_VERSION}"
-VERSION_FLAG="--version ${CHART_VERSION}"
+# 3. 準備 Helm 參數數組 (最穩健的執行方式)
+HELM_OPTS=(
+  "upgrade" "--install" "$SERVICE_NAME" "$CHART_SOURCE"
+  "-n" "$NAMESPACE"
+  "-f" "$ENV_FILE"
+  "--atomic"
+  "--cleanup-on-fail"
+  "--wait"
+  "--timeout" "5m"
+)
 
-# ✅ 聰明的模式切換
+# ✅ 模式判斷
 if [[ "$CHART_SOURCE" == oci://* ]]; then
-  echo "📡 Mode: OCI Deployment ($CHART_VERSION)"
-  # 如果是 OCI，我們假設 Release 端的 sed 已經把值燒進去了，所以不帶 --set
-  # 這樣能保持 Helm 指令乾淨，也符合 GitOps 邏輯
-  SET_FLAGS=""
+  echo "📡 Mode: OCI Deployment"
+  if [[ -n "${CHART_VERSION:-}" ]]; then
+    HELM_OPTS+=("--version" "$CHART_VERSION")
+  fi
+  # OCI 模式下預設不帶 --set，相信 Release 端的燒錄
 else
   echo "📂 Mode: Local Folder Deployment"
-  # Local 模式下，Chart 是空的模板，必須動態注入 Image 資訊
-  SET_FLAGS="--set image.repository=${IMAGE_REPO} --set image.tag=${IMAGE_TAG}"
+  HELM_OPTS+=("--set" "image.repository=${IMAGE_REPO}")
+  HELM_OPTS+=("--set" "image.tag=${IMAGE_TAG}")
 fi
 
 echo "  ⚓ Running Helm Upgrade ($DEPLOY_KIND Mode)..."
 
-# 3. 執行 Helm 部署
-# ✅ 注意 eval 中的轉義，確保變數正確傳入
-if ! eval "helm upgrade --install \"$SERVICE_NAME\" \"$CHART_SOURCE\" \
-  -n \"$NAMESPACE\" \
-  -f \"$ENV_FILE\" \
-  $SET_FLAGS \
-  $VERSION_FLAG \
-  --atomic \
-  --cleanup-on-fail \
-  --wait --timeout 5m"; then
+# 4. 執行 Helm 部署
+# ✅ 使用 "${HELM_OPTS[@]}" 展開，完全避開 eval 與空字串問題
+if ! helm "${HELM_OPTS[@]}"; then
     
     echo "--------------------------------------------------"
     echo "❌ DEPLOYMENT FAILED! Started Diagnostics..."
     echo "--------------------------------------------------"
     
+    # 抓取 K8s 事件
     kubectl -n "$NAMESPACE" get events --sort-by='.lastTimestamp' | tail -n 15
     
+    # 抓取日誌 (使用 Label Selector 避開 fullnameOverride)
     if [[ "$DEPLOY_KIND" == "Deployment" ]]; then
       echo "📋 Fetching logs from failing pods..."
-      # ✅ 修正：改用 Label Selector 抓日誌，避開 Name 拼接問題
-      kubectl -n "$NAMESPACE" logs -l "app.kubernetes.io/name=${NAMESPACE}-$SERVICE_NAME" --tail=50 --all-containers || echo "Could not fetch logs."
+      # ⚠️ 這裡的 Label 名稱必須與你的 _helpers.tpl 產出的 selectorLabels 一致
+      # 根據你的 api.yaml，通常是 app.kubernetes.io/name=${SERVICE_NAME} 
+      # 或是像你寫的 ${NAMESPACE}-$SERVICE_NAME
+      kubectl -n "$NAMESPACE" logs -l "app.kubernetes.io/name=${SERVICE_NAME}" --tail=50 --all-containers || echo "Could not fetch logs."
     fi
     
     echo "⚠️ Helm has automatically rolled back to the previous stable state."
     exit 1
 fi
 
-# 4. 額外狀態檢查 (針對 Job 類型)
+# 5. 額外狀態檢查 (針對 Job 類型)
 if [[ "$DEPLOY_KIND" == "Job" ]]; then
   echo "  ⏳ Waiting for Job completion..."
   if ! kubectl -n "$NAMESPACE" wait --for=condition=complete job \
-    --selector="app.kubernetes.io/name=${NAMESPACE}-$SERVICE_NAME" \
+    --selector="app.kubernetes.io/name=${SERVICE_NAME}" \
     --timeout=5m; then
       echo "❌ Job Failed or Timed out!"
-      kubectl -n "$NAMESPACE" logs --selector="app.kubernetes.io/name=${NAMESPACE}-$SERVICE_NAME" --tail=100
+      kubectl -n "$NAMESPACE" logs --selector="app.kubernetes.io/name=${SERVICE_NAME}" --tail=100
       exit 1
   fi
 fi
