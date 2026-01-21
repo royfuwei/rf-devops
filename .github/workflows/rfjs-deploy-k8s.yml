@@ -7,7 +7,7 @@ on:
       environment: { type: string, default: k8s-royfw }
       namespace: { type: string, default: rfjs }
       image_repo_base: { type: string, default: "royfw" } # A 選項：控制 Harbor project (royfw vs rfjs)
-      chart_repo_base: { type: string, default: "royfw/charts/rfjs" }
+      chart_repo_base: { type: string, default: "royfw/rfjs/charts" }
     secrets:
       GIT_TOKEN: { required: true }
       KUBE_CONFIG: { required: true }

@@ -27,7 +27,8 @@ for row in $(echo "${APPS_JSON}" | jq -r '.[] | @base64'); do
         echo "  📡 Mode: OCI Deployment"
         # ✅ 修正：直接在這裡拼接完整的 OCI Path
         export CHART_SOURCE="oci://${HARBOR_HOST}/${CHART_REPO_BASE}/${APP_ID}"
-        export CHART_VERSION="${APP_VERSION}"
+        # export CHART_VERSION="${APP_VERSION}"
+        export CHART_VERSION="${APP_VERSION}-${ENV_NAME}"
         
         # 登入一次即可，或在循環外登入以增進效率
         echo "$HARBOR_TOKEN" | helm registry login "$HARBOR_HOST" --username "$HARBOR_USERNAME" --password-stdin > /dev/null 2>&1

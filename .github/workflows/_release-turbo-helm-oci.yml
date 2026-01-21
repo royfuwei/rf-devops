@@ -1,4 +1,4 @@
-name: Release Helm Chart (OCI)
+name: Release Turbo Helm Chart (OCI)
 
 on:
   workflow_call:
@@ -53,6 +53,12 @@ jobs:
           PROJECT_ROOT: ${{ inputs.namespace }}    # 專案 e.g. rfjs
         run: |
           set -euo pipefail
+
+          RAW_VERSION="${VERSION}"
+          
+          # 結果: 0.0.2-alpha.0-k8s-royfw
+          ENV_TAG="${PROJECT_ENV}"
+          CHART_VERSION="${RAW_VERSION}-${ENV_TAG}"
           
           # 1. 定義路徑變數
           CHART_NAME="$APP_ID"
@@ -93,8 +99,8 @@ jobs:
           helm dependency update "$CHART_PATH"
 
           helm package "$CHART_PATH" \
-            --version "$VERSION" \
-            --app-version "$VERSION" \
+            --version "$CHART_VERSION" \
+            --app-version "$RAW_VERSION" \
             --destination "$OUT_DIR"
 
           PKG="$(ls -1 "$OUT_DIR"/*.tgz | tail -n 1)"
