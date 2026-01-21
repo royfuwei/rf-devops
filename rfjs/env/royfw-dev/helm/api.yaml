@@ -23,8 +23,9 @@ secrets:
 
 ingress:
   enabled: true
+  ingressClassName: nginx
   hosts:
-    - host: rfjs.api.royfuwei.dev
+    - host: rfjs.api.royfw.dev
       paths:
         - path: /
           pathType: Prefix
@@ -33,7 +34,7 @@ ingress:
   tls:
     - secretName: rfjs-tls-secret
       hosts:
-        - rfjs.api.royfuwei.dev
+        - rfjs.api.royfw.dev
   certManager:
     enabled: true   # ✅ 改成底下是一個物件，這樣 template 可以用
     issuerType: cluster-issuer  # "issuer" or "cluster-issuer"
