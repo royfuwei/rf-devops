@@ -48,6 +48,7 @@ jobs:
           APP_ID: ${{ inputs.app_id }}
           PROJECT_ENV: ${{ inputs.environment }}
           PROJECT_ROOT: ${{ inputs.namespace }}
+          HARBOR_HOST: ${{ secrets.HARBOR_HOST }}
         run: |
           set -euo pipefail
 
@@ -58,21 +59,24 @@ jobs:
           ENV_HELM_DIR="./${PROJECT_ROOT}/env/${PROJECT_ENV}/helm"
           APP_SPECIFIC_VALUES="${ENV_HELM_DIR}/${APP_ID}.yaml"
 
-          # 1. 處理覆寫邏輯
+          # 1. 處理覆寫邏輯 (基礎模板 < 環境共用 < App 專屬)
+          # 先完成檔案合併，確保最後被 sed 修改的是最終成品
           [ -f "${ENV_HELM_DIR}/Chart.yaml" ] && cp -f "${ENV_HELM_DIR}/Chart.yaml" "$CHART_PATH/Chart.yaml"
           [ -f "${ENV_HELM_DIR}/values.yaml" ] && cp -f "${ENV_HELM_DIR}/values.yaml" "$CHART_PATH/values.yaml"
           [ -f "$APP_SPECIFIC_VALUES" ] && cp -f "$APP_SPECIFIC_VALUES" "$CHART_PATH/values.yaml"
 
-          # 2. ✅ 精準注入配置 (使用引號保護變數值)
-          IMAGE_PATH="${{ secrets.HARBOR_HOST }}/${PROJECT_ROOT}/${APP_ID}"
+          # 2. ✅ 動態注入「開箱即用」配置 (必須在 cp 之後！)
+          IMAGE_PATH="${HARBOR_HOST}/${PROJECT_ROOT}/${APP_ID}"
           
-          # 使用 ^ 確保只匹配頂層或特定縮排的 repository
-          sed -i.bak "s|^  repository:.*|  repository: \"${IMAGE_PATH}\"|" "$CHART_PATH/values.yaml"
-          sed -i.bak "s|^  tag:.*|  tag: \"${VERSION}\"|" "$CHART_PATH/values.yaml"
+          # 使用更加寬鬆的 sed 匹配，確保能抓到 repository: "" 或 repository:
+          # 並確保 tag 也有引號保護
+          sed -i.bak -E "s|repository:.*|repository: \"${IMAGE_PATH}\"|g" "$CHART_PATH/values.yaml"
+          sed -i.bak -E "s|tag:.*|tag: \"${VERSION}\"|g" "$CHART_PATH/values.yaml"
 
+          # 注入全名覆蓋
           FULLNAME="${PROJECT_ROOT}-${APP_ID}"
           if grep -q "fullnameOverride:" "$CHART_PATH/values.yaml"; then
-            sed -i.bak "s|^fullnameOverride:.*|fullnameOverride: \"${FULLNAME}\"|" "$CHART_PATH/values.yaml"
+            sed -i.bak -E "s|fullnameOverride:.*|fullnameOverride: \"${FULLNAME}\"|g" "$CHART_PATH/values.yaml"
           else
             echo "fullnameOverride: \"${FULLNAME}\"" >> "$CHART_PATH/values.yaml"
           fi

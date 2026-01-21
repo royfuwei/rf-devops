@@ -34,27 +34,26 @@ fi
 DEPLOY_KIND=$(grep '^kind:' "$ENV_FILE" | awk '{print $2}' | tr -d '\r')
 DEPLOY_KIND="${DEPLOY_KIND:-Deployment}"
 
-VERSION_FLAG=""
-SET_FLAGS=""
+# 確保版本號存在
+: "${CHART_VERSION:?missing CHART_VERSION}"
+VERSION_FLAG="--version ${CHART_VERSION}"
 
-# ✅ 判斷是 OCI 還是 Local Folder
+# ✅ 聰明的模式切換
 if [[ "$CHART_SOURCE" == oci://* ]]; then
-  echo "📡 Mode: OCI Deployment (Using pre-baked values in Chart)"
-  if [[ -n "${CHART_VERSION:-}" ]]; then
-    VERSION_FLAG="--version $CHART_VERSION"
-  fi
-  # OCI 模式下，不使用 --set 覆蓋 image，除非你有特殊需求
+  echo "📡 Mode: OCI Deployment ($CHART_VERSION)"
+  # 如果是 OCI，我們假設 Release 端的 sed 已經把值燒進去了，所以不帶 --set
+  # 這樣能保持 Helm 指令乾淨，也符合 GitOps 邏輯
   SET_FLAGS=""
 else
-  echo "📂 Mode: Local Folder Deployment (Injecting image metadata)"
-  # Local 模式下，必須注入目前的 Image 資訊
-  SET_FLAGS="--set image.repository=$IMAGE_REPO --set image.tag=$IMAGE_TAG"
+  echo "📂 Mode: Local Folder Deployment"
+  # Local 模式下，Chart 是空的模板，必須動態注入 Image 資訊
+  SET_FLAGS="--set image.repository=${IMAGE_REPO} --set image.tag=${IMAGE_TAG}"
 fi
 
 echo "  ⚓ Running Helm Upgrade ($DEPLOY_KIND Mode)..."
 
 # 3. 執行 Helm 部署
-# 使用 eval 來正確處理帶有空格或多個參數的變數
+# ✅ 注意 eval 中的轉義，確保變數正確傳入
 if ! eval "helm upgrade --install \"$SERVICE_NAME\" \"$CHART_SOURCE\" \
   -n \"$NAMESPACE\" \
   -f \"$ENV_FILE\" \
