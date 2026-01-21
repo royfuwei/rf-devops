@@ -4,9 +4,9 @@ on:
   workflow_call:
     inputs:
       version: { required: true, type: string }
-      chart_path: { required: true, type: string }     # e.g. deploy-k8s/charts/service
-      chart_repo_base: { required: true, type: string }     # e.g. royfw/charts/rfjs
-      app_id: { required: true, type: string }            # e.g. api
+      chart_path: { required: true, type: string }
+      chart_repo_base: { required: true, type: string }
+      app_id: { required: true, type: string }
       environment: { required: true, type: string }
       namespace: { required: true, type: string }
     secrets:
@@ -33,82 +33,53 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          RAW='${{ secrets.HARBOR_HOST }}'
-          HOST="$(printf '%s' "$RAW" | tr -d '\r' | xargs)"
+          HOST='${{ secrets.HARBOR_HOST }}'
           HOST="${HOST#http://}"; HOST="${HOST#https://}"; HOST="${HOST%/}"
           echo "HARBOR_HOST_NORMALIZED=$HOST" >> "$GITHUB_ENV"
-
           echo '${{ secrets.HARBOR_TOKEN }}' | helm registry login "$HOST" \
-            --username '${{ secrets.HARBOR_USERNAME }}' \
-            --password-stdin
+            --username '${{ secrets.HARBOR_USERNAME }}' --password-stdin
 
       - name: Package and Push
         shell: bash
         env:
           VERSION: ${{ inputs.version }}
-          CHART_PATH: ${{ inputs.chart_path }}     # 通用模板 e.g. deploy-k8s/charts/service
-          CHART_REPO_BASE: ${{ inputs.chart_repo_base }}     # 倉庫路徑 e.g. royfw/charts/rfjs
-          APP_ID: ${{ inputs.app_id }}             # 應用名稱 e.g. api
-          PROJECT_ENV: ${{ inputs.environment }}   # 環境 e.g. k8s-royfw
-          PROJECT_ROOT: ${{ inputs.namespace }}    # 專案 e.g. rfjs
+          CHART_PATH: ${{ inputs.chart_path }}
+          CHART_REPO_BASE: ${{ inputs.chart_repo_base }}  # e.g., royfw/rfjs/charts
+          APP_ID: ${{ inputs.app_id }}
+          PROJECT_ENV: ${{ inputs.environment }}        # e.g., k8s-royfw
+          PROJECT_ROOT: ${{ inputs.namespace }}
         run: |
           set -euo pipefail
 
-          RAW_VERSION="${VERSION}"
-          
-          # 結果: 0.0.2-alpha.0-k8s-royfw
-          ENV_TAG="${PROJECT_ENV}"
-          CHART_VERSION="${RAW_VERSION}-${ENV_TAG}"
-          
-          # 1. 定義路徑變數
+          # ✅ 1. 恢復純淨版號，不再拼接環境名到 Tag
+          CHART_VERSION="${VERSION}"
           CHART_NAME="$APP_ID"
+          
+          # ✅ 2. 構建帶有環境的路徑 (方案 A: .../charts/環境/App)
+          # 這裡推送到父路徑，helm push 會自動補上 APP_ID 這一層
+          TARGET_REPO_ROOT="${CHART_REPO_BASE}/${PROJECT_ENV}"
+          
           ENV_HELM_DIR="./${PROJECT_ROOT}/env/${PROJECT_ENV}/helm"
           APP_SPECIFIC_VALUES="${ENV_HELM_DIR}/${APP_ID}.yaml"
-          
-          echo "🛠️ 正在為 $CHART_NAME 準備環境專屬 Chart (環境: $PROJECT_ENV)"
 
-          # 2. 處理 Chart.yaml (環境共用配置)
-          # 如果環境目錄下有 Chart.yaml，先覆蓋通用模板
-          if [[ -f "${ENV_HELM_DIR}/Chart.yaml" ]]; then
-            echo "📝 覆蓋環境共用 Chart.yaml: ${ENV_HELM_DIR}/Chart.yaml"
-            cp -f "${ENV_HELM_DIR}/Chart.yaml" "$CHART_PATH/Chart.yaml"
-          fi
-          
-          # 強制修正 Chart name 確保與 APP_ID 一致，這會影響 OCI 最終路徑
+          echo "🛠️ 準備環境專屬 Chart: $CHART_NAME (路徑: $TARGET_REPO_ROOT)"
+
+          # 3. 處理覆寫邏輯 (維持原樣)
+          [ -f "${ENV_HELM_DIR}/Chart.yaml" ] && cp -f "${ENV_HELM_DIR}/Chart.yaml" "$CHART_PATH/Chart.yaml"
+          [ -f "${ENV_HELM_DIR}/values.yaml" ] && cp -f "${ENV_HELM_DIR}/values.yaml" "$CHART_PATH/values.yaml"
+          [ -f "$APP_SPECIFIC_VALUES" ] && cp -f "$APP_SPECIFIC_VALUES" "$CHART_PATH/values.yaml"
+
+          # 4. 同步 Chart 元數據
           sed -i.bak "s/^name: .*/name: $CHART_NAME/" "$CHART_PATH/Chart.yaml"
+          sed -i.bak "s/^version: .*/version: $CHART_VERSION/" "$CHART_PATH/Chart.yaml"
 
-          # 3. 處理 values.yaml (層疊覆蓋)
-          # A. 如果環境目錄下有基礎 values.yaml，先套用
-          if [[ -f "${ENV_HELM_DIR}/values.yaml" ]]; then
-            echo "📝 套用環境基礎 values: ${ENV_HELM_DIR}/values.yaml"
-            cp -f "${ENV_HELM_DIR}/values.yaml" "$CHART_PATH/values.yaml"
-          fi
-          
-          # B. 如果有 App 專屬的環境設定檔 (api.yaml)，最後覆蓋作為 OCI 內建預設
-          if [[ -f "$APP_SPECIFIC_VALUES" ]]; then
-            echo "📝 注入 App 專屬設定至 values.yaml: $APP_SPECIFIC_VALUES"
-            cp -f "$APP_SPECIFIC_VALUES" "$CHART_PATH/values.yaml"
-          fi
-
-          # 4. 打包與推送
+          # 5. 打包
+          helm dependency update "$CHART_PATH"
           OUT_DIR="$(pwd)/.helm-packages"
           mkdir -p "$OUT_DIR"
+          helm package "$CHART_PATH" --version "$CHART_VERSION" --app-version "$VERSION" --destination "$OUT_DIR"
 
-          # 在處理完 Chart.yaml 與 values.yaml 後，打包前執行
-          echo "📦 Updating dependencies..."
-          helm dependency update "$CHART_PATH"
-
-          helm package "$CHART_PATH" \
-            --version "$CHART_VERSION" \
-            --app-version "$RAW_VERSION" \
-            --destination "$OUT_DIR"
-
+          # 6. 推送至環境專屬路徑
           PKG="$(ls -1 "$OUT_DIR"/*.tgz | tail -n 1)"
-          
-          echo "🚀 Pushing OCI artifact: $PKG to oci://${HARBOR_HOST_NORMALIZED}/${CHART_REPO_BASE}"
-          helm push "$PKG" "oci://${HARBOR_HOST_NORMALIZED}/${CHART_REPO_BASE}"
-
-      - name: Logout Harbor
-        if: always()
-        run: |
-          helm registry logout "${HARBOR_HOST_NORMALIZED}" || true
+          # 推送到 .../charts/k8s-royfw，最終在 Harbor 會是 .../charts/k8s-royfw/api
+          helm push "$PKG" "oci://${HARBOR_HOST_NORMALIZED}/${TARGET_REPO_ROOT}"

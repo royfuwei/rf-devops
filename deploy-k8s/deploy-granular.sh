@@ -18,37 +18,35 @@ for row in $(echo "${APPS_JSON}" | jq -r '.[] | @base64'); do
     APP_ID=$(_jq '.id')
     APP_VERSION=$(_jq '.version')
 
-    # 1. 建立該 App 專屬變數
     export SERVICE_NAME="$APP_ID"
-    export ROOT_DIR="." 
     
-    # 2. 決定 Chart 來源 (OCI vs Local)
+    # 決定 OCI 路徑與環境版號
     if [[ -n "${CHART_REPO_BASE:-}" ]]; then
         echo "  📡 Mode: OCI Deployment"
-        # ✅ 修正：直接在這裡拼接完整的 OCI Path
-        export CHART_SOURCE="oci://${HARBOR_HOST}/${CHART_REPO_BASE}/${APP_ID}"
-        # export CHART_VERSION="${APP_VERSION}"
-        export CHART_VERSION="${APP_VERSION}-${ENV_NAME}"
+        # 對齊 Release 端的拼接邏輯
+        # ✅ 拼接路徑：基礎路徑 / 環境名稱 / APP_ID
+        # 例如：oci://harbor.com/royfw/rfjs/charts/k8s-royfw/api
+        export CHART_SOURCE="oci://${HARBOR_HOST}/${CHART_REPO_BASE}/${ENV_NAME}/${APP_ID}"
+        # ✅ 使用純淨版號
+        export CHART_VERSION="${APP_VERSION}"
         
-        # 登入一次即可，或在循環外登入以增進效率
         echo "$HARBOR_TOKEN" | helm registry login "$HARBOR_HOST" --username "$HARBOR_USERNAME" --password-stdin > /dev/null 2>&1
     else
-        echo "  📂 Mode: Local Chart Deployment"
         export CHART_SOURCE="./charts/service"
-        unset CHART_VERSION # 確保不會帶到舊的版號
+        unset CHART_VERSION
     fi
 
-    # 3. 處理 Secrets (這部分沒問題)
+    # 執行 Secret 同步
     bash ./scripts/deploy-secret.sh
 
-    # 4. 處理 Image 路徑
+    # 處理 Image 路徑 (royfw/rfjs/api)
     export REGISTRY_BASE="${HARBOR_HOST}/${IMAGE_REPO_BASE}"
     export IMAGE_REPO="${REGISTRY_BASE}/${NAMESPACE}/${APP_ID}"
     export IMAGE_TAG="$APP_VERSION"
 
+    # 執行最終部署
     bash ./scripts/deploy-service.sh
     echo "✅ Finished: $APP_ID"
-    echo "--------------------------------------------------"
 done
 
 echo "🎉 All deployments completed!"
