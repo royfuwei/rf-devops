@@ -31,13 +31,14 @@ ingress:
 
   # ✅ 修正這裡：改為數組格式
   tls:
-    enabled: true
-    secretName: rfjs-tls-secret  # 使用的 TLS 憑證
-    certManager:
-      enabled: true   # ✅ 改成底下是一個物件，這樣 template 可以用
-      issuerType: cluster-issuer  # "issuer" or "cluster-issuer"
-      issuerName: letsencrypt-dns
-      keepCertificate: false   # ⬅️ ✅ 新增這一行：控制是否啟用 "keep"
+    - secretName: rfjs-tls-secret
+      hosts:
+        - rfjs.api.royfuwei.dev
+  certManager:
+    enabled: true   # ✅ 改成底下是一個物件，這樣 template 可以用
+    issuerType: cluster-issuer  # "issuer" or "cluster-issuer"
+    issuerName: letsencrypt-dns
+    keepCertificate: false   # ⬅️ ✅ 新增這一行：控制是否啟用 "keep"
   annotations:
     spec.ingressClassName: nginx
     nginx.ingress.kubernetes.io/proxy-body-size: '0'
