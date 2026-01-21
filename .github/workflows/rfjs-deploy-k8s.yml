@@ -85,7 +85,7 @@ jobs:
       version: ${{ matrix.app.version }}
       chart_path: deploy-k8s/charts/service
       # ✅ 關鍵：這裡動態拼接 app.id，達成 oci://.../rfjs/api
-      chart_repo: ${{ inputs.chart_repo_prefix }}/${{ matrix.app.id }}
+      chart_repo: ${{ inputs.chart_repo_prefix }}
     secrets:
       HARBOR_HOST: ${{ secrets.HARBOR_HOST }}
       HARBOR_USERNAME: ${{ secrets.HARBOR_USERNAME }}
