@@ -116,8 +116,10 @@ jobs:
           CHART_REPO_BASE: "${{ inputs.chart_repo_base }}"
           IMAGE_REPO_BASE: "${{ inputs.image_repo_base }}"
           # env
-          DATABASE_URL: ${{ secrets.ENV_DATABASE_URL }}
-          APP_NAME: ${{ secrets.ENV_API_APP_NAME }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          ENV_DATABASE_URL: ${{ secrets.ENV_DATABASE_URL }}
+          ENV_API_APP_NAME: ${{ secrets.ENV_API_APP_NAME }}
+          ENV_API_PORT: ${{ secrets.ENV_API_PORT }}
         with:
           kubeconfig: '${{ secrets.KUBE_CONFIG }}'
           exec: |
