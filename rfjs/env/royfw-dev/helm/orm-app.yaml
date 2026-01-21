@@ -1,5 +1,8 @@
 kind: Job
 
+imagePullSecrets:
+  - name: harbor-registry-secret
+  
 image:
   repository: ""
   tag: ""

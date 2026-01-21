@@ -1,9 +1,15 @@
 kind: Deployment
 
+imagePullSecrets:
+  - name: harbor-registry-secret
+
 image:
   repository: ""
   tag: ""
   pullPolicy: IfNotPresent
+
+probes:
+  enabled: true
 
 service:
   port: 3000
