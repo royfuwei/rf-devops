@@ -59,7 +59,7 @@ if ! helm upgrade --install "$SERVICE_NAME" "$CHART_SOURCE" \
     # 如果是 Deployment，嘗試抓取 Pod 日誌 (即使已經回滾，這能幫助找出崩潰原因)
     if [[ "$DEPLOY_KIND" == "Deployment" ]]; then
       echo "📋 Fetching logs from current pods (post-rollback or failing):"
-      kubectl -n "$NAMESPACE" logs deploy/"$SERVICE_NAME" --tail=50 --all-containers || echo "Could not fetch logs."
+      kubectl -n "$NAMESPACE" logs deploy/"${NAMESPACE}-$SERVICE_NAME" --tail=50 --all-containers || echo "Could not fetch logs."
     fi
     
     echo "⚠️ Helm has automatically rolled back to the previous stable state."

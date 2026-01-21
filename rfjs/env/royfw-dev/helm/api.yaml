@@ -9,7 +9,7 @@ image:
   pullPolicy: IfNotPresent
 
 probes:
-  enabled: true
+  enabled: false
 
 service:
   port: 3000
@@ -22,14 +22,7 @@ secrets:
   useEnvFrom: true
 
 ingress:
-  enabled: true
-  # 把 certManager 相關設定移到外面，不要混在 tls 數組裡
-  certManager:
-    enabled: true
-    issuerType: cluster-issuer
-    issuerName: letsencrypt-dns
-    keepCertificate: false
-  
+  enabled: true  
   annotations:
     kubernetes.io/ingress.class: nginx # 建議補上這個
     nginx.ingress.kubernetes.io/proxy-body-size: '0'
@@ -37,7 +30,7 @@ ingress:
     cert-manager.io/cluster-issuer: letsencrypt-dns
 
   hosts:
-    - host: rfjs.api.royfw.dev
+    - host: rfjs.api.royfuwei.dev
       paths:
         - path: /
           pathType: Prefix
@@ -46,4 +39,4 @@ ingress:
   tls:
     - secretName: rfjs-tls-secret
       hosts:
-        - rfjs.api.royfw.dev
+        - rfjs.api.royfuwei.dev
