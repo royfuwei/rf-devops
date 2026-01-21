@@ -3,7 +3,10 @@ name: Reusable Turbo Docker Build
 on:
   workflow_call:
     inputs:
-      image_repo:
+      project: # 新增 project 參數
+        type: string
+        required: true
+      app_id: # 建議與 OCI 流程統一，直接傳 app_id
         type: string
         required: true
       image_repo_base:
@@ -14,7 +17,7 @@ on:
         required: true
       buildPath:
         type: string
-        required: true # 傳入: ./apps/api/Dockerfile
+        required: true
       environment:
         type: string
         required: true
@@ -43,33 +46,33 @@ jobs:
           username: ${{ secrets.HARBOR_USERNAME }}
           password: ${{ secrets.HARBOR_TOKEN }}
 
-      # ✅ 自動解析 Dockerfile 所需的參數
       - name: Extract Metadata
         id: meta
         run: |
-          # 1. 解析 APP 專案路徑 (例如: apps/api)
           APP_PATH=$(dirname "${{ inputs.buildPath }}" | sed 's|^\./||')
-          # 2. 取得 package.json 裡的 name 作為 TURBO_SCOPE (例如: @rfjs/api)
           SCOPE=$(node -p "require('./$APP_PATH/package.json').name")
+          
+          # ✅ 構建符合新架構的 Image Tag
+          # 格式: harbor.com/royfw/rfjs/api:1.0.0
+          FULL_IMAGE_NAME="${{ secrets.HARBOR_HOST }}/${{ inputs.image_repo_base }}/${{ inputs.project }}/${{ inputs.app_id }}"
           
           echo "app_path=$APP_PATH" >> "$GITHUB_OUTPUT"
           echo "scope=$SCOPE" >> "$GITHUB_OUTPUT"
-          echo "🚀 Scope: $SCOPE, Path: $APP_PATH"
+          echo "full_image=$FULL_IMAGE_NAME" >> "$GITHUB_OUTPUT"
+          echo "🚀 Image: $FULL_IMAGE_NAME, Scope: $SCOPE"
 
       - name: Build and Push
         uses: docker/build-push-action@v5
         with:
-          # ⚠️ 重要：Context 必須是根目錄，Turbo 才能 prune
           context: .
           file: ${{ inputs.buildPath }}
           push: true
           tags: |
-            ${{ secrets.HARBOR_HOST }}/${{ inputs.image_repo_base }}/${{ inputs.image_repo }}:${{ inputs.version }}
-            ${{ secrets.HARBOR_HOST }}/${{ inputs.image_repo_base }}/${{ inputs.image_repo }}:latest
+            ${{ steps.meta.outputs.full_image }}:${{ inputs.version }}
+            ${{ steps.meta.outputs.full_image }}:latest
           build-args: |
             TURBO_SCOPE=${{ steps.meta.outputs.scope }}
             TURBO_APP_PATH=${{ steps.meta.outputs.app_path }}
             NODE_VERSION=22.21
-          # 使用 GitHub Actions 緩存機制
           cache-from: type=gha
           cache-to: type=gha,mode=max

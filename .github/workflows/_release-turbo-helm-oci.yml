@@ -8,8 +8,8 @@ on:
       chart_repo_base: { required: true, type: string }
       image_repo_base: { required: true, type: string }
       app_id: { required: true, type: string }
-      environment: { required: true, type: string }
-      namespace: { required: true, type: string }
+      environment: { required: true, type: string } # 對應 ENV_NAME (如 royfw-dev)
+      project: { required: true, type: string }     # 對應 PROJECT (如 rfjs)
     secrets:
       HARBOR_HOST: { required: true }
       HARBOR_USERNAME: { required: true }
@@ -49,41 +49,45 @@ jobs:
           IMAGE_REPO_BASE: ${{ inputs.image_repo_base }}
           APP_ID: ${{ inputs.app_id }}
           PROJECT_ENV: ${{ inputs.environment }}
-          PROJECT_ROOT: ${{ inputs.namespace }}
+          PROJECT_NAME: ${{ inputs.project }} # 改用 project 語意
           HARBOR_HOST: ${{ secrets.HARBOR_HOST }}
         run: |
           set -euo pipefail
 
           CHART_VERSION="${VERSION}"
           CHART_NAME="$APP_ID"
+          
+          # OCI 存放路徑：.../charts/royfw-dev/api
           TARGET_REPO_ROOT="${CHART_REPO_BASE}/${PROJECT_ENV}"
           
-          ENV_HELM_DIR="./${PROJECT_ROOT}/env/${PROJECT_ENV}/helm"
+          # ✅ 關鍵：從 PROJECT 目錄讀取環境預設值
+          # 例如：./rfjs/env/royfw-dev/helm/api.yaml
+          ENV_HELM_DIR="./${PROJECT_NAME}/env/${PROJECT_ENV}/helm"
           APP_SPECIFIC_VALUES="${ENV_HELM_DIR}/${APP_ID}.yaml"
 
-          # 1. 處理覆寫邏輯 (基礎模板 < 環境共用 < App 專屬)
-          # 先完成檔案合併，確保最後被 sed 修改的是最終成品
-          [ -f "${ENV_HELM_DIR}/Chart.yaml" ] && cp -f "${ENV_HELM_DIR}/Chart.yaml" "$CHART_PATH/Chart.yaml"
-          [ -f "${ENV_HELM_DIR}/values.yaml" ] && cp -f "${ENV_HELM_DIR}/values.yaml" "$CHART_PATH/values.yaml"
+          # 1. 處理覆寫邏輯
+          if [ -d "$ENV_HELM_DIR" ]; then
+            [ -f "${ENV_HELM_DIR}/Chart.yaml" ] && cp -f "${ENV_HELM_DIR}/Chart.yaml" "$CHART_PATH/Chart.yaml"
+            [ -f "${ENV_HELM_DIR}/values.yaml" ] && cp -f "${ENV_HELM_DIR}/values.yaml" "$CHART_PATH/values.yaml"
+          fi
           [ -f "$APP_SPECIFIC_VALUES" ] && cp -f "$APP_SPECIFIC_VALUES" "$CHART_PATH/values.yaml"
 
-          # 2. ✅ 動態注入「開箱即用」配置 (必須在 cp 之後！)
-          IMAGE_PATH="${HARBOR_HOST}/${IMAGE_REPO_BASE}/${PROJECT_ROOT}/${APP_ID}"
+          # 2. ✅ 動態注入「開箱即用」配置
+          # Image 路徑：{host}/{base}/{project}/{app} -> 例如 harbor/royfw/rfjs/api
+          IMAGE_PATH="${HARBOR_HOST}/${IMAGE_REPO_BASE}/${PROJECT_NAME}/${APP_ID}"
           
-          # 使用更加寬鬆的 sed 匹配，確保能抓到 repository: "" 或 repository:
-          # 並確保 tag 也有引號保護
           sed -i.bak -E "s|repository:.*|repository: \"${IMAGE_PATH}\"|g" "$CHART_PATH/values.yaml"
           sed -i.bak -E "s|tag:.*|tag: \"${VERSION}\"|g" "$CHART_PATH/values.yaml"
 
-          # 注入全名覆蓋
-          FULLNAME="${PROJECT_ROOT}-${APP_ID}"
+          # ✅ 注入全名覆蓋 (固定為 project-app，不隨 namespace 改變)
+          FULLNAME="${PROJECT_NAME}-${APP_ID}"
           if grep -q "fullnameOverride:" "$CHART_PATH/values.yaml"; then
             sed -i.bak -E "s|fullnameOverride:.*|fullnameOverride: \"${FULLNAME}\"|g" "$CHART_PATH/values.yaml"
           else
             echo "fullnameOverride: \"${FULLNAME}\"" >> "$CHART_PATH/values.yaml"
           fi
 
-          # 3. 同步 Chart 元數據 (包含 appVersion)
+          # 3. 同步 Chart 元數據
           sed -i.bak "s|^name: .*|name: $CHART_NAME|" "$CHART_PATH/Chart.yaml"
           sed -i.bak "s|^version: .*|version: $CHART_VERSION|" "$CHART_PATH/Chart.yaml"
           sed -i.bak "s|^appVersion: .*|appVersion: \"$VERSION\"|" "$CHART_PATH/Chart.yaml"

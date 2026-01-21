@@ -1,15 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# 優先順序：由外部導出的 PROJECT，若無則回退到 NAMESPACE (保持相容性)
+PROJECT="${PROJECT:-$NAMESPACE}" 
 NAMESPACE="${NAMESPACE:-test}"
 ENV_NAME="${ENV_NAME:-NewK8s}"
 SERVICE_NAME="${SERVICE_NAME:-}"
-ROOT_DIR="${ROOT_DIR:-.}"
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 REPO_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
 
-echo "Using namespace: $NAMESPACE"
+echo "Using project folder: $PROJECT"
+echo "Target namespace: $NAMESPACE"
 echo "Using env: $ENV_NAME"
 echo "Service: ${SERVICE_NAME:-<none>}"
 
@@ -32,7 +34,7 @@ apply_docker_registry_secret "harbor-registry-secret"
 
 if [[ -z "$SERVICE_NAME" ]]; then exit 0; fi
 
-ENV_DIR="${REPO_ROOT}/${NAMESPACE}/env/${ENV_NAME}/env_keys"
+ENV_DIR="${REPO_ROOT}/${PROJECT}/env/${ENV_NAME}/env_keys"
 KEYS_FILE="${ENV_DIR}/${SERVICE_NAME}.secrets.keys"
 COMMON_KEYS_FILE="${ENV_DIR}/common.secrets.keys"
 

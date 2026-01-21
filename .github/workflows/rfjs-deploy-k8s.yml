@@ -5,7 +5,8 @@ on:
     inputs:
       ref: { type: string, required: true }
       environment: { type: string, default: k8s-royfw }
-      namespace: { type: string, default: rfjs }
+      project: { type: string, default: rfjs }         # 對應目錄 & Harbor Project
+      namespace: { type: string, default: rfjs-dev }
       image_repo_base: { type: string, default: "royfw" } # A 選項：控制 Harbor project (royfw vs rfjs)
       chart_repo_base: { type: string, default: "royfw/rfjs/charts" }
     secrets:
@@ -57,13 +58,13 @@ jobs:
     needs: detect
     if: needs.detect.outputs.has_apps == 'true'
     strategy:
-      fail-fast: false
       matrix:
         app: ${{ fromJson(needs.detect.outputs.apps_matrix) }}
     uses: ./.github/workflows/_release-turbo-docker.yml
     with:
-      image_repo: ${{ inputs.namespace }}/${{ matrix.app.id }} # 例如 rfjs/api
-      image_repo_base: ${{ inputs.image_repo_base }}           # 例如 royfw
+      project: ${{ inputs.project }}      # 傳入 rfjs
+      app_id: ${{ matrix.app.id }}       # 傳入 api
+      image_repo_base: ${{ inputs.image_repo_base }}
       version: ${{ matrix.app.version }}
       buildPath: ./${{ matrix.app.path }}/Dockerfile
       environment: ${{ inputs.environment }}
@@ -88,8 +89,8 @@ jobs:
       # ✅ 關鍵：這裡動態拼接 app.id，達成 oci://.../rfjs/api
       chart_repo_base: ${{ inputs.chart_repo_base }}
       image_repo_base: ${{ inputs.image_repo_base }}
-      environment: ${{ inputs.environment }}
-      namespace: ${{ inputs.namespace }}
+      project: ${{ inputs.project }} # 傳入 "rfjs"
+      environment: ${{ inputs.environment }} # 傳入 "royfw-dev"
     secrets:
       HARBOR_HOST: ${{ secrets.HARBOR_HOST }}
       HARBOR_USERNAME: ${{ secrets.HARBOR_USERNAME }}
@@ -126,5 +127,6 @@ jobs:
           exec: |
             bash ./deploy-k8s/deploy-granular.sh \
               '${{ needs.detect.outputs.apps_matrix }}' \
+              '${{ inputs.project }}' \
               '${{ inputs.namespace }}' \
               '${{ inputs.environment }}'

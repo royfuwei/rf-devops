@@ -1,6 +1,7 @@
 kind: Deployment
 
 service:
+  type: ClusterIP  # 或是 NodePort
   port: 3000
 containerPort: 3000
 

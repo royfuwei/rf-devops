@@ -12,6 +12,7 @@ probes:
   enabled: false
 
 service:
+  type: ClusterIP  # 或是 NodePort
   port: 80
 containerPort: 3000
 
